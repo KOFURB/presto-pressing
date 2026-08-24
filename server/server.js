@@ -292,6 +292,11 @@ app.put('/api/tarifs', authRequired, requireModule('parametres'), ah(async (req,
   res.json({ type, prix: Number(prix) || 0 });
 }));
 
+app.delete('/api/tarifs/:type', authRequired, requireModule('parametres'), ah(async (req, res) => {
+  await pool.query('DELETE FROM tarifs WHERE type=?', [req.params.type]);
+  res.json({ ok: true });
+}));
+
 app.put('/api/settings', authRequired, requireModule('parametres'), ah(async (req, res) => {
   const b = req.body || {};
   if (b.loyaltyRate != null) await setSetting('loyaltyRate', Number(b.loyaltyRate) || 1000);

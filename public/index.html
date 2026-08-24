@@ -3160,7 +3160,7 @@ window.orderForm=function(id,presetClient){
 function renderItemRows(){
   const wrap=document.getElementById('itemRows');
   wrap.innerHTML=window._items.map((it,i)=>`<div class="item-row">
-    <select onchange="itemChange(${i},'type',this.value)">${ARTICLE_TYPES.map(t=>`<option ${t===it.type?'selected':''}>${t}</option>`).join('')}</select>
+    <select onchange="itemChange(${i},'type',this.value)">${DB.tarifs.map(x=>x.type).map(t=>`<option ${t===it.type?'selected':''}>${t}</option>`).join('')}</select>
     <input type="number" min="1" value="${it.qty}" onchange="itemChange(${i},'qty',this.value)">
     <select onchange="itemChange(${i},'etat',this.value)">${['Normal','Délicat','Très sale','Repassage seul'].map(e=>`<option ${e===it.etat?'selected':''}>${e}</option>`).join('')}</select>
     <input type="number" class="r" value="${it.prixUnit}" onchange="itemChange(${i},'prixUnit',this.value)">
@@ -3669,9 +3669,9 @@ function renderParametres(){
   document.getElementById('view').innerHTML=`
   <div class="two-col">
     <div class="card card-pad">
-      <div class="section-head"><h2>Grille tarifaire</h2></div>
+      <div class="section-head"><h2>Grille tarifaire</h2><div class="topbar-spacer"></div><button class="btn btn-sm btn-primary" onclick="tarifForm()">${svg('plus')} Ajouter</button></div>
       <div class="table-wrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Prix (F)</th><th></th></tr></thead>
-      <tbody>${DB.tarifs.map((t,i)=>`<tr><td>${esc(t.type)}</td><td class="r"><input type="number" value="${t.prix}" data-ttype="${esc(t.type)}" style="width:100px;text-align:right;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:5px 8px;color:var(--ink)" onchange="setTarif(this.dataset.ttype,this.value)"></td><td class="r"></td></tr>`).join('')}</tbody></table></div>
+      <tbody>${DB.tarifs.map((t,i)=>`<tr data-ttype="${esc(t.type)}"><td>${esc(t.type)}</td><td class="r"><input type="number" value="${t.prix}" data-ttype="${esc(t.type)}" style="width:100px;text-align:right;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:5px 8px;color:var(--ink)" onchange="setTarif(this.dataset.ttype,this.value)"></td><td class="r"><button class="btn btn-sm btn-danger" onclick="deleteTarif(this.closest('tr').dataset.ttype)">${svg('trash')}</button></td></tr>`).join('')}</tbody></table></div>
     </div>
     <div>
       <div class="card card-pad" style="margin-bottom:16px">
@@ -3696,6 +3696,26 @@ function renderParametres(){
   </div>`;
 }
 window.setTarif=async function(type,v){ const prix=parseInt(v)||0; try{ await API.put('/tarifs',{type,prix}); const t=DB.tarifs.find(x=>x.type===type); if(t)t.prix=prix; toast('Tarif mis à jour','good'); }catch(e){ toast(e.message,'err'); } };
+window.tarifForm=function(){
+  openModal(`<div class="modal-head"><h3>Nouvel article</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
+  <div class="modal-body"><div class="form-grid" style="grid-template-columns:1fr 130px">
+    <div class="fld"><label>Type de vêtement *</label><input id="t_type" placeholder="ex. Blouson"></div>
+    <div class="fld"><label>Prix (F) *</label><input type="number" id="t_prix" value="0"></div>
+  </div></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveTarif()">${svg('check')} Ajouter</button></div>`);
+};
+window.saveTarif=async function(){
+  const type=document.getElementById('t_type').value.trim();
+  const prix=parseInt(document.getElementById('t_prix').value)||0;
+  if(!type){ toast('Type requis','err'); return; }
+  if(DB.tarifs.some(t=>t.type.toLowerCase()===type.toLowerCase())){ toast('Ce type existe déjà','err'); return; }
+  try{ await API.put('/tarifs',{type,prix}); DB.tarifs.push({type,prix}); closeModal(); renderParametres(); toast('Article ajouté','good'); }
+  catch(e){ toast(e.message,'err'); }
+};
+window.deleteTarif=async function(type){
+  try{ await API.del('/tarifs/'+encodeURIComponent(type)); DB.tarifs=DB.tarifs.filter(t=>t.type!==type); renderParametres(); toast('Article supprimé'); }
+  catch(e){ toast(e.message,'err'); }
+};
 window.saveSettings=async function(){ const loyaltyRate=parseInt(document.getElementById('p_loyal').value)||1000; const smsProvider=document.getElementById('p_sms').value; try{ await API.put('/settings',{loyaltyRate,smsProvider}); DB.settings.loyaltyRate=loyaltyRate; DB.settings.smsProvider=smsProvider; toast('Paramètres enregistrés','good'); }catch(e){ toast(e.message,'err'); } };
 window.agencyForm=function(id){
   const a=id?DB.agencies.find(x=>x.id===id):{name:'',ville:'',tel:''};

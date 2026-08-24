@@ -429,6 +429,18 @@ app.put('/api/agencies/:id', authRequired, requireModule('parametres'), ah(async
   res.json(mapAgency(r[0]));
 }));
 
+app.delete('/api/agencies/:id', authRequired, requireModule('parametres'), ah(async (req, res) => {
+  const id = req.params.id;
+  const [cnt] = await pool.query('SELECT COUNT(*) AS n FROM agencies');
+  if (cnt[0].n <= 1) return res.status(400).json({ error: 'Impossible de supprimer la derniere agence' });
+  const tables = ['clients','orders','employees','expenses','stock'];
+  let used = 0;
+  for (const t of tables) { const [r] = await pool.query('SELECT COUNT(*) AS n FROM '+t+' WHERE agency_id=?', [id]); used += r[0].n; }
+  if (used > 0) return res.status(400).json({ error: 'Agence utilisee par des donnees (clients, commandes, employes, depenses ou stocks). Supprimez ou deplacez ces donnees avant.' });
+  await pool.query('DELETE FROM agencies WHERE id=?', [id]);
+  res.json({ ok: true });
+}));
+
 app.post('/api/reset-demo', authRequired, requireAdmin, ah(async (req, res) => {
   await pool.query('DELETE FROM order_items');
   await pool.query('DELETE FROM orders');

@@ -3686,7 +3686,7 @@ function renderParametres(){
     <div>
       <div class="card card-pad" style="margin-bottom:16px">
         <div class="section-head"><h2>Agences</h2></div>
-        <div class="list-plain">${DB.agencies.map(a=>`<div class="list-row"><span class="kpi-ico" style="background:var(--accent-soft);color:var(--accent);width:32px;height:32px">${svg('parametres')}</span><div style="flex:1"><div class="cell-strong">${esc(a.name)}</div><div class="cell-sub">${esc(a.ville)} · ${esc(a.tel)}</div></div><button class="btn btn-sm btn-ghost" onclick="agencyForm('${a.id}')">${svg('edit')}</button></div>`).join('')}</div>
+        <div class="list-plain">${DB.agencies.map(a=>`<div class="list-row"><span class="kpi-ico" style="background:var(--accent-soft);color:var(--accent);width:32px;height:32px">${svg('parametres')}</span><div style="flex:1"><div class="cell-strong">${esc(a.name)}</div><div class="cell-sub">${esc(a.ville)} · ${esc(a.tel)}</div></div><button class="btn btn-sm btn-ghost" onclick="agencyForm('${a.id}')">${svg('edit')}</button>${DB.agencies.length>1?`<button class="btn btn-sm btn-ghost btn-danger" onclick="deleteAgency('${a.id}')">${svg('trash')}</button>`:''}</div>`).join('')}</div>
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="agencyForm()">${svg('plus')} Ajouter une agence</button>
       </div>
       <div class="card card-pad">
@@ -3775,6 +3775,16 @@ window.saveAgency=async function(id){
     else{ const a=await API.post('/agencies',data); DB.agencies.push(a); toast('Agence créée','good'); }
     closeModal(); renderTopbar(); renderParametres();
   }catch(e){ toast(e.message,'err'); }
+};
+window.deleteAgency=function(id){
+  const a=DB.agencies.find(x=>x.id===id); if(!a) return;
+  openModal(`<div class="modal-head"><h3>Supprimer l'agence ?</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
+  <div class="modal-body"><p>Supprimer l'agence <b>${esc(a.name)}</b> ?</p><p class="page-sub" style="margin-top:8px">Possible uniquement si aucune donnée (client, commande, employé, dépense, stock) n'y est rattachée. Action irréversible.</p></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger" onclick="doDeleteAgency('${id}')">${svg('trash')} Supprimer</button></div>`);
+};
+window.doDeleteAgency=async function(id){
+  try{ await API.del('/agencies/'+id); removeIn(DB.agencies,id); if(DB.currentAgency===id){ DB.currentAgency=DB.agencies[0]?DB.agencies[0].id:null; setAgencyPref(DB.currentAgency); } closeModal(); renderTopbar(); renderNav(); renderParametres(); toast('Agence supprimée','good'); }
+  catch(e){ toast(e.message,'err'); }
 };
 window.resetDemo=function(){
   openModal(`<div class="modal-head"><h3>Réinitialiser les données test ?</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>

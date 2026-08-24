@@ -2713,6 +2713,7 @@ function applyBootstrap(d){
     stock: d.stock || [],
     tarifs: d.tarifs || [],
     settings: d.settings || { loyaltyRate:1000, smsProvider:'HSMS.CI', shopName:'Presto Pressing' },
+    notifConfig: d.notifConfig || {},
     me: d.me,
     access: d.access || []
   };
@@ -3693,6 +3694,29 @@ function renderParametres(){
         </div>
       </div>
     </div>
+  </div>
+  <div class="card card-pad" style="margin-top:16px">
+    <div class="section-head"><h2>Notifications — Email & SMS</h2></div>
+    <p class="page-sub" style="margin-bottom:14px">Identifiants d'envoi (accessibles à l'administrateur uniquement, stockés sur le serveur).</p>
+    <div style="font-size:12px;font-weight:700;color:var(--accent-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">Email (SMTP)</div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="fld"><label>Email (expéditeur)</label><input id="n_email" value="${esc((DB.notifConfig||{}).notif_email||'')}" placeholder="contact@nova-pressing.ci"></div>
+      <div class="fld"><label>Serveur SMTP</label><input id="n_smtp_server" value="${esc((DB.notifConfig||{}).smtp_server||'')}" placeholder="smtp.exemple.com"></div>
+      <div class="fld"><label>Login SMTP</label><input id="n_smtp_login" value="${esc((DB.notifConfig||{}).smtp_login||'')}"></div>
+      <div class="fld"><label>Mot de passe SMTP</label><input type="password" id="n_smtp_password" value="${esc((DB.notifConfig||{}).smtp_password||'')}"></div>
+      <div class="fld"><label>Port SMTP</label><input id="n_smtp_port" value="${esc((DB.notifConfig||{}).smtp_port||'')}" placeholder="587"></div>
+    </div>
+    <div class="divider"></div>
+    <div style="font-size:12px;font-weight:700;color:var(--accent-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">SMS</div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr">
+      <div class="fld"><label>SMS URL</label><input id="n_sms_url" value="${esc((DB.notifConfig||{}).sms_url||'')}"></div>
+      <div class="fld"><label>SMS API Key</label><input id="n_sms_apikey" value="${esc((DB.notifConfig||{}).sms_apikey||'')}"></div>
+      <div class="fld"><label>SMS Expéditeur</label><input id="n_sms_sender" value="${esc((DB.notifConfig||{}).sms_sender||'')}" placeholder="NOVA"></div>
+      <div class="fld"><label>SMS Client Secret</label><input type="password" id="n_sms_clientsecret" value="${esc((DB.notifConfig||{}).sms_clientsecret||'')}"></div>
+      <div class="fld"><label>SMS Client ID</label><input id="n_sms_clientid" value="${esc((DB.notifConfig||{}).sms_clientid||'')}"></div>
+      <div class="fld"><label>SMS Token</label><input type="password" id="n_sms_token" value="${esc((DB.notifConfig||{}).sms_token||'')}"></div>
+    </div>
+    <button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="saveNotifConfig()">${svg('check')} Enregistrer les identifiants</button>
   </div>`;
 }
 window.setTarif=async function(type,v){ const prix=parseInt(v)||0; try{ await API.put('/tarifs',{type,prix}); const t=DB.tarifs.find(x=>x.type===type); if(t)t.prix=prix; toast('Tarif mis à jour','good'); }catch(e){ toast(e.message,'err'); } };
@@ -3717,6 +3741,12 @@ window.deleteTarif=async function(type){
   catch(e){ toast(e.message,'err'); }
 };
 window.saveSettings=async function(){ const loyaltyRate=parseInt(document.getElementById('p_loyal').value)||1000; const smsProvider=document.getElementById('p_sms').value; try{ await API.put('/settings',{loyaltyRate,smsProvider}); DB.settings.loyaltyRate=loyaltyRate; DB.settings.smsProvider=smsProvider; toast('Paramètres enregistrés','good'); }catch(e){ toast(e.message,'err'); } };
+window.saveNotifConfig=async function(){
+  const g=x=>{const el=document.getElementById(x);return el?el.value.trim():'';};
+  const cfg={notif_email:g('n_email'),smtp_server:g('n_smtp_server'),smtp_login:g('n_smtp_login'),smtp_password:g('n_smtp_password'),smtp_port:g('n_smtp_port'),sms_url:g('n_sms_url'),sms_apikey:g('n_sms_apikey'),sms_sender:g('n_sms_sender'),sms_clientsecret:g('n_sms_clientsecret'),sms_clientid:g('n_sms_clientid'),sms_token:g('n_sms_token')};
+  try{ await API.put('/settings',cfg); DB.notifConfig=Object.assign(DB.notifConfig||{},cfg); toast('Identifiants enregistrés','good'); }
+  catch(e){ toast(e.message,'err'); }
+};
 window.agencyForm=function(id){
   const a=id?DB.agencies.find(x=>x.id===id):{name:'',ville:'',tel:''};
   openModal(`<div class="modal-head"><h3>${id?'Modifier l\'agence':'Nouvelle agence'}</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>

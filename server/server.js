@@ -90,7 +90,8 @@ app.get('/api/bootstrap', authRequired, ah(async (req, res) => {
     expenses: expenses.map(mapExpense),
     stock: stock.map(mapStock),
     tarifs: tarifs.map(t => ({ type: t.type, prix: t.prix })),
-    settings: { loyaltyRate: Number(settings.loyaltyRate) || 1000, smsProvider: settings.smsProvider || 'HSMS.CI', shopName: settings.shopName || 'Presto Pressing' }
+    settings: { loyaltyRate: Number(settings.loyaltyRate) || 1000, smsProvider: settings.smsProvider || 'HSMS.CI', shopName: settings.shopName || 'Presto Pressing' },
+    notifConfig: req.user.role==='Administrateur' ? ['notif_email','smtp_server','smtp_login','smtp_password','smtp_port','sms_url','sms_apikey','sms_sender','sms_clientsecret','sms_clientid','sms_token'].reduce((o,k)=>{o[k]=settings[k]||'';return o;},{}) : {}
   });
 }));
 
@@ -302,6 +303,8 @@ app.put('/api/settings', authRequired, requireModule('parametres'), ah(async (re
   if (b.loyaltyRate != null) await setSetting('loyaltyRate', Number(b.loyaltyRate) || 1000);
   if (b.smsProvider != null) await setSetting('smsProvider', b.smsProvider);
   if (b.shopName != null) await setSetting('shopName', b.shopName);
+  const NKEYS = ['notif_email','smtp_server','smtp_login','smtp_password','smtp_port','sms_url','sms_apikey','sms_sender','sms_clientsecret','sms_clientid','sms_token'];
+  for (const k of NKEYS) { if (b[k] != null) await setSetting(k, b[k]); }
   res.json({ ok: true });
 }));
 

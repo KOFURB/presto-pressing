@@ -309,6 +309,15 @@ app.post('/api/agencies', authRequired, requireModule('parametres'), ah(async (r
   res.json(mapAgency(r[0]));
 }));
 
+app.put('/api/agencies/:id', authRequired, requireModule('parametres'), ah(async (req, res) => {
+  const b = req.body || {};
+  if (!b.name) return res.status(400).json({ error: 'Nom requis' });
+  await pool.query('UPDATE agencies SET name=?,ville=?,tel=? WHERE id=?', [b.name, b.ville || '', b.tel || '', req.params.id]);
+  const [r] = await pool.query('SELECT * FROM agencies WHERE id=?', [req.params.id]);
+  if (!r.length) return res.status(404).json({ error: 'Agence introuvable' });
+  res.json(mapAgency(r[0]));
+}));
+
 // ============ static frontend ============
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res) => {

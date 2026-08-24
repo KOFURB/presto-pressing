@@ -3676,7 +3676,7 @@ function renderParametres(){
     <div>
       <div class="card card-pad" style="margin-bottom:16px">
         <div class="section-head"><h2>Agences</h2></div>
-        <div class="list-plain">${DB.agencies.map(a=>`<div class="list-row"><span class="kpi-ico" style="background:var(--accent-soft);color:var(--accent);width:32px;height:32px">${svg('parametres')}</span><div style="flex:1"><div class="cell-strong">${esc(a.name)}</div><div class="cell-sub">${esc(a.ville)} · ${esc(a.tel)}</div></div></div>`).join('')}</div>
+        <div class="list-plain">${DB.agencies.map(a=>`<div class="list-row"><span class="kpi-ico" style="background:var(--accent-soft);color:var(--accent);width:32px;height:32px">${svg('parametres')}</span><div style="flex:1"><div class="cell-strong">${esc(a.name)}</div><div class="cell-sub">${esc(a.ville)} · ${esc(a.tel)}</div></div><button class="btn btn-sm btn-ghost" onclick="agencyForm('${a.id}')">${svg('edit')}</button></div>`).join('')}</div>
         <button class="btn btn-sm btn-ghost" style="margin-top:10px" onclick="agencyForm()">${svg('plus')} Ajouter une agence</button>
       </div>
       <div class="card card-pad">
@@ -3697,20 +3697,25 @@ function renderParametres(){
 }
 window.setTarif=async function(type,v){ const prix=parseInt(v)||0; try{ await API.put('/tarifs',{type,prix}); const t=DB.tarifs.find(x=>x.type===type); if(t)t.prix=prix; toast('Tarif mis à jour','good'); }catch(e){ toast(e.message,'err'); } };
 window.saveSettings=async function(){ const loyaltyRate=parseInt(document.getElementById('p_loyal').value)||1000; const smsProvider=document.getElementById('p_sms').value; try{ await API.put('/settings',{loyaltyRate,smsProvider}); DB.settings.loyaltyRate=loyaltyRate; DB.settings.smsProvider=smsProvider; toast('Paramètres enregistrés','good'); }catch(e){ toast(e.message,'err'); } };
-window.agencyForm=function(){
-  openModal(`<div class="modal-head"><h3>Nouvelle agence</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
+window.agencyForm=function(id){
+  const a=id?DB.agencies.find(x=>x.id===id):{name:'',ville:'',tel:''};
+  openModal(`<div class="modal-head"><h3>${id?'Modifier l\'agence':'Nouvelle agence'}</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
   <div class="modal-body"><div class="form-grid">
-    <div class="fld"><label>Nom *</label><input id="a_name" placeholder="Presto …"></div>
-    <div class="fld"><label>Ville / quartier</label><input id="a_ville" placeholder="Abidjan — …"></div>
-    <div class="fld"><label>Téléphone</label><input id="a_tel"></div>
+    <div class="fld"><label>Nom (affiché sur les reçus) *</label><input id="a_name" value="${esc(a.name)}" placeholder="NOVA PRESSING — Cocody"></div>
+    <div class="fld"><label>Adresse</label><input id="a_ville" value="${esc(a.ville)}" placeholder="Abidjan — Cocody"></div>
+    <div class="fld"><label>Téléphone</label><input id="a_tel" value="${esc(a.tel)}" placeholder="07 ..."></div>
   </div></div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveAgency()">${svg('check')} Créer</button></div>`);
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveAgency('${id||''}')">${svg('check')} ${id?'Enregistrer':'Créer'}</button></div>`);
 };
-window.saveAgency=async function(){
+window.saveAgency=async function(id){
   const g=x=>document.getElementById(x).value.trim();
   if(!g('a_name')){ toast('Nom requis','err'); return; }
-  try{ const a=await API.post('/agencies',{name:g('a_name'),ville:g('a_ville'),tel:g('a_tel')}); DB.agencies.push(a); closeModal(); renderTopbar(); renderParametres(); toast('Agence créée','good'); }
-  catch(e){ toast(e.message,'err'); }
+  const data={name:g('a_name'),ville:g('a_ville'),tel:g('a_tel')};
+  try{
+    if(id){ const a=await API.put('/agencies/'+id,data); replaceIn(DB.agencies,a); toast('Agence mise à jour','good'); }
+    else{ const a=await API.post('/agencies',data); DB.agencies.push(a); toast('Agence créée','good'); }
+    closeModal(); renderTopbar(); renderParametres();
+  }catch(e){ toast(e.message,'err'); }
 };
 
 /* ============ Boot ============ */

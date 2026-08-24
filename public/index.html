@@ -3699,7 +3699,7 @@ function renderParametres(){
         <div class="section-head"><h2>Données</h2></div>
         <p class="page-sub" style="margin-bottom:12px">Les données sont enregistrées sur le serveur (base MySQL), partagées entre tous les postes.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-sm" onclick="exportCSV()">${svg('download')} Exporter les commandes</button>
+          <button class="btn btn-sm" onclick="exportCSV()">${svg('download')} Exporter les commandes</button><button class="btn btn-sm btn-danger" onclick="resetDemo()">${svg('trash')} Réinitialiser données test</button>
         </div>
       </div>
     </div>
@@ -3775,6 +3775,18 @@ window.saveAgency=async function(id){
     else{ const a=await API.post('/agencies',data); DB.agencies.push(a); toast('Agence créée','good'); }
     closeModal(); renderTopbar(); renderParametres();
   }catch(e){ toast(e.message,'err'); }
+};
+window.resetDemo=function(){
+  openModal(`<div class="modal-head"><h3>Réinitialiser les données test ?</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
+  <div class="modal-body">
+    <div class="role-note" style="border-color:var(--crit-soft);color:var(--crit);background:var(--crit-soft);display:flex;gap:8px;align-items:flex-start">${svg('alert')} <span>Cette action supprime définitivement tous les <b>clients, commandes, employés, dépenses et stocks</b>. Les <b>utilisateurs, tarifs, agences et paramètres</b> sont conservés, et la numérotation des commandes repart à 0001.</span></div>
+    <p class="page-sub" style="margin-top:12px">Action irréversible. Pensez à faire une sauvegarde avant si nécessaire.</p>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger" onclick="doResetDemo()">${svg('trash')} Oui, tout supprimer</button></div>`);
+};
+window.doResetDemo=async function(){
+  try{ await API.post('/reset-demo',{}); closeModal(); toast('Données test supprimées','good'); setTimeout(()=>location.reload(),800); }
+  catch(e){ toast(e.message,'err'); }
 };
 
 /* ============ Boot ============ */

@@ -429,6 +429,17 @@ app.put('/api/agencies/:id', authRequired, requireModule('parametres'), ah(async
   res.json(mapAgency(r[0]));
 }));
 
+app.post('/api/reset-demo', authRequired, requireAdmin, ah(async (req, res) => {
+  await pool.query('DELETE FROM order_items');
+  await pool.query('DELETE FROM orders');
+  await pool.query('DELETE FROM clients');
+  await pool.query('DELETE FROM employees');
+  await pool.query('DELETE FROM expenses');
+  await pool.query('DELETE FROM stock');
+  await setSetting('seq', '0');
+  res.json({ ok: true });
+}));
+
 // ============ static frontend ============
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('*', (req, res) => {

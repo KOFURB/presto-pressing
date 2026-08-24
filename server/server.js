@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const pool = require('./db');
 const { sign, authRequired, requireModule, requireAdmin, ROLE_ACCESS } = require('./auth');
+const nodemailer = require('nodemailer');
 
 const app = express();
 app.use(cors());
@@ -79,6 +80,57 @@ async function orderSMS(orderId, kind){
   if(kind==='reminder') msg='Bonjour '+prenom+', rappel : votre commande '+ord.num+' vous attend chez '+shop+'.'+resteTxt+' Merci de venir la retirer.';
   else msg='Bonjour '+prenom+', votre commande '+ord.num+' chez '+shop+' est prete.'+resteTxt+' Merci !';
   return await sendSMS(cl[0].tel, msg);
+}
+
+// ---- Email (SMTP via nodemailer) ----
+function eMoney(n){ return (Math.round(n||0)).toLocaleString('fr-FR').replace(/ | /g,' ')+' FCFA'; }
+function invoiceHTML(ord, items, cl, ag){
+  const brut=items.reduce((s,it)=>s+it.qty*it.prix_unit,0);
+  const reste=Math.max(0, ord.montant - ord.paye);
+  const rows=items.map(it=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${it.type}</td><td style="padding:6px;border-bottom:1px solid #eee;color:#777">${it.etat||''}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:center">${it.qty}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${eMoney(it.prix_unit)}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${eMoney(it.qty*it.prix_unit)}</td></tr>`).join('');
+  const shop=ag&&ag.name?ag.name:'Pressing';
+  return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:auto;color:#111">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div style="font-size:20px;font-weight:800;color:#143a70">${shop}</div><div style="font-size:12px;color:#555">${ag&&ag.ville?ag.ville:''}<br>${ag&&ag.tel?('Tel. '+ag.tel):''}</div></div>
+      <div style="text-align:right"><div style="font-weight:800">FACTURE</div><div style="font-size:12px;color:#555">N&deg; ${ord.num.replace('PR','FAC')}<br>Date : ${ord.depot_date}</div></div>
+    </div>
+    <div style="margin:16px 0;padding:10px;background:#f4f7fb;border-radius:8px">
+      <div style="font-size:11px;text-transform:uppercase;color:#777">Factur&eacute; &agrave;</div>
+      <div style="font-weight:700">${cl?cl.prenom+' '+cl.nom:''}</div>
+      <div style="font-size:12px;color:#555">${cl?cl.tel||'':''} ${cl&&cl.adresse?('&middot; '+cl.adresse):''}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:2px solid #143a70;color:#143a70;text-align:left"><th style="padding:6px">Article</th><th>&Eacute;tat</th><th style="text-align:center">Qt&eacute;</th><th style="text-align:right">P.U.</th><th style="text-align:right">Montant</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-top:14px"><table style="font-size:13px;min-width:240px">
+      <tr><td style="padding:3px 10px;color:#555">Sous-total</td><td style="text-align:right">${eMoney(brut)}</td></tr>
+      ${ord.remise?`<tr><td style="padding:3px 10px;color:#555">Remise</td><td style="text-align:right">- ${eMoney(ord.remise)}</td></tr>`:''}
+      <tr style="border-top:2px solid #143a70"><td style="padding:6px 10px;font-weight:800">TOTAL</td><td style="text-align:right;font-weight:800;color:#143a70">${eMoney(ord.montant)}</td></tr>
+      <tr><td style="padding:3px 10px;color:#555">Pay&eacute;</td><td style="text-align:right">${eMoney(ord.paye)}</td></tr>
+      <tr><td style="padding:3px 10px;font-weight:700">Reste d&ucirc;</td><td style="text-align:right;font-weight:700;color:${reste>0?'#c33b4d':'#1c8f5a'}">${eMoney(reste)}</td></tr>
+    </table></div>
+    <p style="margin-top:22px;text-align:center;font-size:11px;color:#999">Merci de votre confiance &mdash; ${shop}</p>
+  </div>`;
+}
+async function sendInvoiceEmail(orderId){
+  const [o]=await pool.query('SELECT * FROM orders WHERE id=?',[orderId]);
+  if(!o.length) return { ok:false, skipped:true };
+  const ord=o[0];
+  const [cl]=await pool.query('SELECT * FROM clients WHERE id=?',[ord.client_id]);
+  if(!cl.length || !cl[0].email) return { ok:false, skipped:true, reason:'Client sans adresse email' };
+  const [items]=await pool.query('SELECT * FROM order_items WHERE order_id=?',[orderId]);
+  const [ag]=await pool.query('SELECT * FROM agencies WHERE id=?',[ord.agency_id]);
+  const keys=['notif_email','smtp_server','smtp_login','smtp_password','smtp_port'];
+  const c={}; for(const k of keys) c[k]=await getSetting(k,'');
+  if(!c.smtp_server || !c.smtp_login || !c.smtp_password) return { ok:false, skipped:true, reason:'Configuration SMTP incomplete' };
+  const port=Number(c.smtp_port)||587;
+  try{
+    const transporter=nodemailer.createTransport({ host:c.smtp_server, port, secure:port===465, auth:{ user:c.smtp_login, pass:c.smtp_password } });
+    const shop=(ag.length&&ag[0].name)?ag[0].name:(await getSetting('shopName','Pressing'));
+    await transporter.sendMail({ from:c.notif_email||c.smtp_login, to:cl[0].email, subject:'Votre facture '+ord.num.replace('PR','FAC')+' - '+shop, html:invoiceHTML(ord, items, cl[0], ag[0]) });
+    return { ok:true };
+  }catch(e){ console.error('Email erreur', e.message); return { ok:false, error:e.message }; }
 }
 
 // ============ AUTH ============
@@ -175,6 +227,7 @@ app.post('/api/orders', authRequired, requireModule('commandes'), ah(async (req,
   const rate = Number(await getSetting('loyaltyRate', '1000')) || 1000;
   const pts = Math.floor(montant / rate);
   if (pts > 0) await pool.query('UPDATE clients SET points = points + ? WHERE id=?', [pts, b.clientId]);
+  sendInvoiceEmail(id).catch(()=>{});
   res.json(await fetchOrderFull(id));
 }));
 
@@ -230,6 +283,12 @@ app.post('/api/orders/:id/remind', authRequired, requireModule('commandes'), ah(
   const r = await orderSMS(req.params.id, 'reminder');
   if (r.ok) return res.json({ ok: true });
   res.status(400).json({ error: r.reason || r.error || 'Echec de l\'envoi SMS' });
+}));
+
+app.post('/api/orders/:id/email', authRequired, requireModule('facturation'), ah(async (req, res) => {
+  const r = await sendInvoiceEmail(req.params.id);
+  if (r.ok) return res.json({ ok: true });
+  res.status(400).json({ error: r.reason || r.error || 'Echec de l\'envoi email' });
 }));
 
 // ============ EMPLOYEES ============

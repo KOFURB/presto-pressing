@@ -3127,6 +3127,10 @@ window.remindSMS=async function(id){
   try{ await API.post('/orders/'+id+'/remind',{}); toast('SMS de rappel envoyé au client','good'); }
   catch(e){ toast('SMS : '+e.message,'err'); }
 };
+window.emailInvoice=async function(id){
+  try{ await API.post('/orders/'+id+'/email',{}); toast('Facture envoyée par email','good'); }
+  catch(e){ toast('Email : '+e.message,'err'); }
+};
 
 window.orderForm=function(id,presetClient){
   const o=id?DB.orders.find(x=>x.id===id):{clientId:presetClient||'',items:[{type:'Chemise',qty:1,etat:'Normal',prixUnit:priceOf('Chemise')}],depotDate:todayISO(),dueDate:addDays(todayISO(),3),status:'Reçu',prodStage:'Réception',remise:0,paye:0,notes:''};
@@ -3410,7 +3414,7 @@ window.viewInvoice=function(id){
     </table></div>
     <div style="margin-top:24px;text-align:center;font-size:11px;color:#999">Facture générée par Presto Pressing · Merci de votre confiance</div>
   </div></div></div>
-  <div class="modal-foot no-print"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn btn-primary" onclick="printEl('invoice')">${svg('print')} Imprimer / PDF</button></div>`,true);
+  <div class="modal-foot no-print"><button class="btn btn-ghost" onclick="closeModal()">Fermer</button><button class="btn" onclick="emailInvoice('${o.id}')">${svg('facturation')} Envoyer par email</button><button class="btn btn-primary" onclick="printEl('invoice')">${svg('print')} Imprimer / PDF</button></div>`,true);
 };
 
 /* ============ FINANCES ============ */

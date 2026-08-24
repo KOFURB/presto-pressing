@@ -45,6 +45,42 @@ function computeMontant(items, remise) {
   return Math.max(0, brut - (Number(remise) || 0));
 }
 
+// ---- HSMS SMS ----
+function normTel(t){ let d=String(t||'').replace(/\D/g,''); if(!d) return ''; if(d.startsWith('225')) return d; return '225'+d; }
+async function smsConfig(){ const keys=['sms_url','sms_token','sms_clientid','sms_clientsecret','sms_sender']; const c={}; for(const k of keys) c[k]=await getSetting(k,''); return c; }
+async function sendSMS(tel, message){
+  const c=await smsConfig();
+  const to=normTel(tel);
+  if(!to) return { ok:false, skipped:true, reason:'Numero de telephone manquant' };
+  if(!c.sms_token || !c.sms_clientid || !c.sms_clientsecret) return { ok:false, skipped:true, reason:'Configuration SMS incomplete (token/clientid/clientsecret)' };
+  const url=c.sms_url || 'https://hsms.ci/api/envoi-sms';
+  const body={ clientid:c.sms_clientid, clientsecret:c.sms_clientsecret, telephone:to, message, unicode:true };
+  if(c.sms_sender) body.expediteur=c.sms_sender;
+  try{
+    const r=await fetch(url,{ method:'POST', headers:{ 'Authorization':'Bearer '+c.sms_token, 'Content-Type':'application/json' }, body:JSON.stringify(body) });
+    let data={}; try{ data=await r.json(); }catch(e){}
+    const ok = r.ok && data.success!==false;
+    if(!ok) console.error('SMS echec', r.status, JSON.stringify(data));
+    return { ok, status:r.status, data };
+  }catch(e){ console.error('SMS erreur', e.message); return { ok:false, error:e.message }; }
+}
+async function orderSMS(orderId, kind){
+  const [o]=await pool.query('SELECT * FROM orders WHERE id=?',[orderId]);
+  if(!o.length) return { ok:false, skipped:true };
+  const ord=o[0];
+  const [cl]=await pool.query('SELECT * FROM clients WHERE id=?',[ord.client_id]);
+  if(!cl.length || !cl[0].tel) return { ok:false, skipped:true, reason:'Client sans numero de telephone' };
+  const [ag]=await pool.query('SELECT * FROM agencies WHERE id=?',[ord.agency_id]);
+  const shop=(ag.length && ag[0].name) ? ag[0].name : (await getSetting('shopName','Presto Pressing'));
+  const reste=Math.max(0, ord.montant - ord.paye);
+  const prenom=cl[0].prenom||'';
+  const resteTxt = reste>0 ? (' Reste a payer: '+reste+' FCFA.') : '';
+  let msg;
+  if(kind==='reminder') msg='Bonjour '+prenom+', rappel : votre commande '+ord.num+' vous attend chez '+shop+'.'+resteTxt+' Merci de venir la retirer.';
+  else msg='Bonjour '+prenom+', votre commande '+ord.num+' chez '+shop+' est prete.'+resteTxt+' Merci !';
+  return await sendSMS(cl[0].tel, msg);
+}
+
 // ============ AUTH ============
 app.post('/api/auth/login', ah(async (req, res) => {
   const { login, password } = req.body || {};
@@ -162,6 +198,7 @@ app.put('/api/orders/:id', authRequired, requireModule('commandes'), ah(async (r
     await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit) VALUES (?,?,?,?,?)',
       [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0]);
   }
+  if (status === 'Prêt' && ex[0].status !== 'Prêt') { orderSMS(id, 'ready').catch(()=>{}); }
   res.json(await fetchOrderFull(id));
 }));
 
@@ -185,7 +222,14 @@ app.patch('/api/orders/:id/stage', authRequired, requireModule('production'), ah
   let livreAt = ex[0].livre_at;
   if (status === 'Livré' && !livreAt) livreAt = todayISO();
   await pool.query('UPDATE orders SET prod_stage=?,status=?,livre_at=? WHERE id=?', [stage, status, livreAt, req.params.id]);
+  if (status === 'Prêt' && ex[0].status !== 'Prêt') { orderSMS(req.params.id, 'ready').catch(()=>{}); }
   res.json(await fetchOrderFull(req.params.id));
+}));
+
+app.post('/api/orders/:id/remind', authRequired, requireModule('commandes'), ah(async (req, res) => {
+  const r = await orderSMS(req.params.id, 'reminder');
+  if (r.ok) return res.json({ ok: true });
+  res.status(400).json({ error: r.reason || r.error || 'Echec de l\'envoi SMS' });
 }));
 
 // ============ EMPLOYEES ============

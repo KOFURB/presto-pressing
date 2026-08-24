@@ -3113,6 +3113,7 @@ function renderCommandes(){
         <td><span class="pill ${payStatus(o)}">${payLabel(o)}</span></td>
         <td class="r money-strong tnum">${FCFA(o.montant)}${orderReste(o)>0?`<div class="cell-sub">Reste ${FCFA(orderReste(o))}</div>`:''}</td>
         <td class="r"><div style="display:inline-flex;gap:5px">
+          ${o.status==='Prêt'?`<button class="btn btn-sm" onclick="remindSMS('${o.id}')" title="Rappel SMS de retrait">${svg('bell')}</button>`:''}
           <button class="btn btn-sm" onclick="viewReceipt('${o.id}')" title="Reçu">${svg('receipt')}</button>
           <button class="btn btn-sm btn-ghost" onclick="orderForm('${o.id}')" title="Modifier">${svg('edit')}</button>
         </div></td></tr>`;}).join('')
@@ -3122,6 +3123,10 @@ function renderCommandes(){
   s.oninput=()=>{ orderSearch=s.value; const p=s.selectionStart; renderCommandes(); const ns=document.getElementById('oSearch'); ns.focus(); ns.setSelectionRange(p,p); };
 }
 window.setOF=v=>{ orderFilter=v; renderCommandes(); };
+window.remindSMS=async function(id){
+  try{ await API.post('/orders/'+id+'/remind',{}); toast('SMS de rappel envoyé au client','good'); }
+  catch(e){ toast('SMS : '+e.message,'err'); }
+};
 
 window.orderForm=function(id,presetClient){
   const o=id?DB.orders.find(x=>x.id===id):{clientId:presetClient||'',items:[{type:'Chemise',qty:1,etat:'Normal',prixUnit:priceOf('Chemise')}],depotDate:todayISO(),dueDate:addDays(todayISO(),3),status:'Reçu',prodStage:'Réception',remise:0,paye:0,notes:''};

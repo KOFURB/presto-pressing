@@ -3113,6 +3113,7 @@ function renderCommandes(){
         <td><span class="pill ${payStatus(o)}">${payLabel(o)}</span></td>
         <td class="r money-strong tnum">${FCFA(o.montant)}${orderReste(o)>0?`<div class="cell-sub">Reste ${FCFA(orderReste(o))}</div>`:''}</td>
         <td class="r"><div style="display:inline-flex;gap:5px">
+          ${o.status==='Prêt'?`<button class="btn btn-sm" style="color:#25D366;border-color:#25D36640" onclick="waNotify('${o.id}')" title="Notifier par WhatsApp">${svg('whatsapp')}</button>`:''}
           ${o.status==='Prêt'?`<button class="btn btn-sm" onclick="remindSMS('${o.id}')" title="Rappel SMS de retrait">${svg('bell')}</button>`:''}
           <button class="btn btn-sm" onclick="viewReceipt('${o.id}')" title="Reçu">${svg('receipt')}</button>
           <button class="btn btn-sm btn-ghost" onclick="orderForm('${o.id}')" title="Modifier">${svg('edit')}</button>
@@ -3126,6 +3127,20 @@ window.setOF=v=>{ orderFilter=v; renderCommandes(); };
 window.remindSMS=async function(id){
   try{ await API.post('/orders/'+id+'/remind',{}); toast('SMS de rappel envoyé au client','good'); }
   catch(e){ toast('SMS : '+e.message,'err'); }
+};
+window.waNotify=function(id){
+  const o=DB.orders.find(x=>x.id===id); if(!o) return;
+  const c=clientById(o.clientId);
+  if(!c||!c.tel){ toast('Client sans numéro de téléphone','err'); return; }
+  const ag=DB.agencies.find(a=>a.id===o.agencyId);
+  const shop=(ag&&ag.name)||(DB.settings&&DB.settings.shopName)||'notre pressing';
+  const reste=orderReste(o);
+  const resteTxt=reste>0?(' Reste à payer : '+FCFA(reste)+'.'):'';
+  const msg='Bonjour '+(c.prenom||'')+' 👋, votre commande '+o.num+' chez '+shop+' est prête ✅.'+resteTxt+' Merci de passer la retirer 🙏';
+  const tel=String(c.tel||'').replace(/\D/g,'');
+  const intl=tel.startsWith('225')?tel:('225'+tel);
+  window.open('https://wa.me/'+intl+'?text='+encodeURIComponent(msg),'_blank','noopener');
+  toast('Ouverture de WhatsApp…','good');
 };
 window.emailInvoice=async function(id){
   try{ await API.post('/orders/'+id+'/email',{}); toast('Facture envoyée par email','good'); }

@@ -29,7 +29,7 @@ const mapStock = r => ({ id: r.id, agencyId: r.agency_id, nom: r.nom, categorie:
 const mapUser = r => ({ id: r.id, nom: r.nom, login: r.login, role: r.role, actif: !!r.actif });
 const mapAgency = r => ({ id: r.id, name: r.name, ville: r.ville, tel: r.tel });
 const mapOrder = (r, items) => ({ id: r.id, num: r.num, agencyId: r.agency_id, clientId: r.client_id, depotDate: r.depot_date, dueDate: r.due_date, status: r.status, prodStage: r.prod_stage, remise: r.remise, montant: r.montant, paye: r.paye, notes: r.notes, createdAt: r.created_at, livreAt: r.livre_at, items: items || [] });
-const mapItem = r => ({ type: r.type, qty: r.qty, etat: r.etat, prixUnit: r.prix_unit });
+const mapItem = r => ({ type: r.type, qty: r.qty, etat: r.etat, prixUnit: r.prix_unit, prestation: r.prestation || 'Nettoyage' });
 
 async function getSetting(k, def) { const [r] = await pool.query('SELECT v FROM settings WHERE k=?', [k]); return r.length ? r[0].v : def; }
 async function setSetting(k, v) { await pool.query('INSERT INTO settings (k,v) VALUES (?,?) ON DUPLICATE KEY UPDATE v=VALUES(v)', [k, String(v)]); }
@@ -87,7 +87,7 @@ function eMoney(n){ return (Math.round(n||0)).toLocaleString('fr-FR').replace(/�
 function invoiceHTML(ord, items, cl, ag){
   const brut=items.reduce((s,it)=>s+it.qty*it.prix_unit,0);
   const reste=Math.max(0, ord.montant - ord.paye);
-  const rows=items.map(it=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${it.type}</td><td style="padding:6px;border-bottom:1px solid #eee;color:#777">${it.etat||''}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:center">${it.qty}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${eMoney(it.prix_unit)}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${eMoney(it.qty*it.prix_unit)}</td></tr>`).join('');
+  const rows=items.map(it=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${it.type}${it.prestation==='Repassage'?' (Repassage)':''}</td><td style="padding:6px;border-bottom:1px solid #eee;color:#777">${it.etat||''}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:center">${it.qty}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${eMoney(it.prix_unit)}</td><td style="padding:6px;border-bottom:1px solid #eee;text-align:right">${eMoney(it.qty*it.prix_unit)}</td></tr>`).join('');
   const shop=ag&&ag.name?ag.name:'Pressing';
   return `<div style="font-family:Arial,sans-serif;max-width:640px;margin:auto;color:#111">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -177,7 +177,7 @@ app.get('/api/bootstrap', authRequired, ah(async (req, res) => {
     users: users.map(mapUser),
     expenses: expenses.map(mapExpense),
     stock: stock.map(mapStock),
-    tarifs: tarifs.map(t => ({ type: t.type, prix: t.prix })),
+    tarifs: tarifs.map(t => ({ type: t.type, prix: t.prix, prixRepassage: t.prix_repassage || 0 })),
     settings: { loyaltyRate: Number(settings.loyaltyRate) || 1000, smsProvider: settings.smsProvider || 'HSMS.CI', shopName: settings.shopName || 'Presto Pressing' },
     notifConfig: req.user.role==='Administrateur' ? ['notif_email','smtp_server','smtp_login','smtp_password','smtp_port','sms_url','sms_apikey','sms_sender','sms_clientsecret','sms_clientid','sms_token'].reduce((o,k)=>{o[k]=settings[k]||'';return o;},{}) : {}
   });
@@ -220,8 +220,8 @@ app.post('/api/orders', authRequired, requireModule('commandes'), ah(async (req,
   await pool.query('INSERT INTO orders (id,num,agency_id,client_id,depot_date,due_date,status,prod_stage,remise,montant,paye,notes,created_at,livre_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
     [id, num, b.agencyId, b.clientId, b.depotDate, b.dueDate, status, b.prodStage || 'Réception', Number(b.remise) || 0, montant, paye, b.notes || '', todayISO(), status === 'Livré' ? todayISO() : null]);
   for (const it of items) {
-    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit) VALUES (?,?,?,?,?)',
-      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0]);
+    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit,prestation) VALUES (?,?,?,?,?,?)',
+      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0, it.prestation || 'Nettoyage']);
   }
   // fidélité
   const rate = Number(await getSetting('loyaltyRate', '1000')) || 1000;
@@ -248,8 +248,8 @@ app.put('/api/orders/:id', authRequired, requireModule('commandes'), ah(async (r
     [b.clientId, b.depotDate, b.dueDate, status, b.prodStage, Number(b.remise) || 0, montant, paye, b.notes || '', livreAt, id]);
   await pool.query('DELETE FROM order_items WHERE order_id=?', [id]);
   for (const it of items) {
-    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit) VALUES (?,?,?,?,?)',
-      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0]);
+    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit,prestation) VALUES (?,?,?,?,?,?)',
+      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0, it.prestation || 'Nettoyage']);
   }
   if (status === 'Prêt' && ex[0].status !== 'Prêt') { orderSMS(id, 'ready').catch(()=>{}); }
   res.json(await fetchOrderFull(id));
@@ -390,10 +390,14 @@ app.delete('/api/stock/:id', authRequired, requireModule('stocks'), ah(async (re
 
 // ============ TARIFS / SETTINGS / AGENCIES (admin via parametres) ============
 app.put('/api/tarifs', authRequired, requireModule('parametres'), ah(async (req, res) => {
-  const { type, prix } = req.body || {};
+  const b = req.body || {};
+  const type = b.type;
   if (!type) return res.status(400).json({ error: 'Type requis' });
-  await pool.query('INSERT INTO tarifs (type,prix) VALUES (?,?) ON DUPLICATE KEY UPDATE prix=VALUES(prix)', [type, Number(prix) || 0]);
-  res.json({ type, prix: Number(prix) || 0 });
+  await pool.query('INSERT INTO tarifs (type,prix,prix_repassage) VALUES (?,?,?) ON DUPLICATE KEY UPDATE type=type', [type, Number(b.prix) || 0, Number(b.prixRepassage) || 0]);
+  if (b.prix != null) await pool.query('UPDATE tarifs SET prix=? WHERE type=?', [Number(b.prix) || 0, type]);
+  if (b.prixRepassage != null) await pool.query('UPDATE tarifs SET prix_repassage=? WHERE type=?', [Number(b.prixRepassage) || 0, type]);
+  const [r] = await pool.query('SELECT * FROM tarifs WHERE type=?', [type]);
+  res.json({ type, prix: r.length ? r[0].prix : 0, prixRepassage: r.length ? r[0].prix_repassage : 0 });
 }));
 
 app.delete('/api/tarifs/:type', authRequired, requireModule('parametres'), ah(async (req, res) => {

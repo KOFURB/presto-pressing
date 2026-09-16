@@ -245,7 +245,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .toast.good{background:var(--good)} .toast.err{background:var(--crit)}
 @keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 .items-editor{display:flex;flex-direction:column;gap:8px}
-.item-row{display:grid;grid-template-columns:1fr 74px 96px 116px 34px;gap:8px;align-items:center}
+.item-row{display:grid;grid-template-columns:1.2fr 112px 58px 92px 96px 30px;gap:7px;align-items:center}
 .item-row.head{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
 .item-row input,.item-row select{padding:7px 9px}
 .mini-x{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;width:32px;height:32px;display:grid;place-items:center;color:var(--crit)}
@@ -267,7 +267,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 @media (max-width:560px){
   .view{padding:16px 14px 60px}
   .topbar{padding:12px 14px}
-  .item-row{grid-template-columns:1fr 54px 80px 90px 30px;gap:6px}
+  .item-row{grid-template-columns:1.1fr 92px 44px 74px 74px 26px;gap:5px}
   .agency-select .lbl{display:none}
 }
 @media print{
@@ -2781,6 +2781,7 @@ const clientById = id => DB.clients.find(c=>c.id===id);
 const clientName = id => { const c=clientById(id); return c? `${c.prenom} ${c.nom}`:'Client supprimé'; };
 const curUser = () => DB.me || {nom:'—',role:'Administrateur'};
 const priceOf = t => (DB.tarifs.find(x=>x.type===t)||{prix:1000}).prix;
+const priceFor = (t,prest) => { const x=DB.tarifs.find(y=>y.type===t)||{}; return prest==='Repassage' ? (Number(x.prixRepassage)||0) : (Number(x.prix)||1000); };
 const orderReste = o => Math.max(0, o.montant - o.paye);
 const payStatus = o => o.paye<=0 ? 'impaye' : orderReste(o)>0 ? 'partiel' : 'paye';
 const payLabel = o => ({impaye:'Impayé',partiel:'Partiel',paye:'Payé'})[payStatus(o)];
@@ -3148,7 +3149,7 @@ window.emailInvoice=async function(id){
 };
 
 window.orderForm=function(id,presetClient){
-  const o=id?DB.orders.find(x=>x.id===id):{clientId:presetClient||'',items:[{type:'Chemise',qty:1,etat:'Normal',prixUnit:priceOf('Chemise')}],depotDate:todayISO(),dueDate:addDays(todayISO(),3),status:'Reçu',prodStage:'Réception',remise:0,paye:0,notes:''};
+  const o=id?DB.orders.find(x=>x.id===id):{clientId:presetClient||'',items:[{type:'Chemise',qty:1,etat:'Normal',prestation:'Nettoyage',prixUnit:priceFor('Chemise','Nettoyage')}],depotDate:todayISO(),dueDate:addDays(todayISO(),3),status:'Reçu',prodStage:'Réception',remise:0,paye:0,notes:''};
   const clients=inAgency(DB.clients).sort((a,b)=>a.nom.localeCompare(b.nom));
   openModal(`<div class="modal-head"><h3>${id?'Modifier la commande '+o.num:'Nouvelle commande'}</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
   <div class="modal-body">
@@ -3161,7 +3162,7 @@ window.orderForm=function(id,presetClient){
     </div>
     <label style="font-size:12px;font-weight:600;color:var(--ink-soft)">Articles déposés</label>
     <div class="items-editor" id="itemsEditor" style="margin:8px 0 4px">
-      <div class="item-row head"><span>Type de vêtement</span><span>Qté</span><span>État</span><span class="r">Prix unit.</span><span></span></div>
+      <div class="item-row head"><span>Article</span><span>Prestation</span><span>Qté</span><span>État</span><span class="r">Prix</span><span></span></div>
       <div id="itemRows"></div>
     </div>
     <button class="btn btn-sm btn-ghost" onclick="addItemRow()">${svg('plus')} Ajouter un article</button>
@@ -3186,16 +3187,17 @@ function renderItemRows(){
   const wrap=document.getElementById('itemRows');
   wrap.innerHTML=window._items.map((it,i)=>`<div class="item-row">
     <select onchange="itemChange(${i},'type',this.value)">${DB.tarifs.map(x=>x.type).map(t=>`<option ${t===it.type?'selected':''}>${t}</option>`).join('')}</select>
+    <select onchange="itemChange(${i},'prestation',this.value)">${['Nettoyage','Repassage'].map(pr=>`<option ${pr===(it.prestation||'Nettoyage')?'selected':''}>${pr}</option>`).join('')}</select>
     <input type="number" min="1" value="${it.qty}" onchange="itemChange(${i},'qty',this.value)">
-    <select onchange="itemChange(${i},'etat',this.value)">${['Normal','Délicat','Très sale','Repassage seul'].map(e=>`<option ${e===it.etat?'selected':''}>${e}</option>`).join('')}</select>
+    <select onchange="itemChange(${i},'etat',this.value)">${['Normal','Délicat','Très sale'].map(e=>`<option ${e===it.etat?'selected':''}>${e}</option>`).join('')}</select>
     <input type="number" class="r" value="${it.prixUnit}" onchange="itemChange(${i},'prixUnit',this.value)">
     <button class="mini-x" onclick="removeItem(${i})" ${window._items.length<=1?'style="opacity:.4;pointer-events:none"':''}>${svg('trash')}</button>
   </div>`).join('');
   recalcOrder();
 }
-window.addItemRow=()=>{ window._items.push({type:'Pantalon',qty:1,etat:'Normal',prixUnit:priceOf('Pantalon')}); renderItemRows(); };
+window.addItemRow=()=>{ window._items.push({type:'Pantalon',qty:1,etat:'Normal',prestation:'Nettoyage',prixUnit:priceFor('Pantalon','Nettoyage')}); renderItemRows(); };
 window.removeItem=i=>{ window._items.splice(i,1); renderItemRows(); };
-window.itemChange=(i,k,v)=>{ if(k==='qty'||k==='prixUnit') v=parseInt(v)||0; if(k==='type') window._items[i].prixUnit=priceOf(v); window._items[i][k]=v; if(k==='type')renderItemRows(); else recalcOrder(); };
+window.itemChange=(i,k,v)=>{ if(k==='qty'||k==='prixUnit') v=parseInt(v)||0; window._items[i][k]=v; if(k==='type'||k==='prestation') window._items[i].prixUnit=priceFor(window._items[i].type, window._items[i].prestation||'Nettoyage'); if(k==='type'||k==='prestation') renderItemRows(); else recalcOrder(); };
 window.recalcOrder=()=>{ const brut=window._items.reduce((s,it)=>s+it.qty*it.prixUnit,0); const rem=parseInt(document.getElementById('o_remise').value)||0; document.getElementById('o_total').textContent=FCFA(Math.max(0,brut-rem)); };
 window.saveOrder=async function(id){
   const g=x=>document.getElementById(x).value;
@@ -3235,7 +3237,7 @@ window.viewReceipt=function(id){
       <tr><td>Dépôt</td><td style="text-align:right">${fdate(o.depotDate)}</td></tr>
       <tr><td>Livraison</td><td style="text-align:right">${fdate(o.dueDate)}</td></tr></table>
     <div class="r-line"></div>
-    <table>${o.items.map(it=>`<tr><td>${it.qty}× ${esc(it.type)}<div style="font-size:10px;color:#666 !important">${esc(it.etat)}</div></td><td style="text-align:right">${FCFA(it.qty*it.prixUnit)}</td></tr>`).join('')}</table>
+    <table>${o.items.map(it=>`<tr><td>${it.qty}× ${esc(it.type)}${it.prestation==='Repassage'?' (Repassage)':''}<div style="font-size:10px;color:#666 !important">${esc(it.etat)}</div></td><td style="text-align:right">${FCFA(it.qty*it.prixUnit)}</td></tr>`).join('')}</table>
     <div class="r-line"></div>
     <table>
       <tr><td>Sous-total</td><td style="text-align:right">${FCFA(brut)}</td></tr>
@@ -3373,8 +3375,8 @@ function renderFacturation(){
     </div>
     <div class="card card-pad">
       <div class="section-head"><h2>Grille tarifaire</h2><div class="topbar-spacer"></div>${allowed('parametres')?`<button class="btn btn-sm btn-ghost" onclick="go('parametres')">${svg('edit')} Modifier</button>`:''}</div>
-      <div class="table-wrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Prix unitaire</th></tr></thead>
-      <tbody>${DB.tarifs.map(t=>`<tr><td>${esc(t.type)}</td><td class="r money-strong tnum">${FCFA(t.prix)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="table-wrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Nettoyage</th><th class="r">Repassage</th></tr></thead>
+      <tbody>${DB.tarifs.map(t=>`<tr><td>${esc(t.type)}</td><td class="r money-strong tnum">${FCFA(t.prix)}</td><td class="r tnum">${FCFA(t.prixRepassage||0)}</td></tr>`).join('')}</tbody></table></div>
     </div>
   </div>`;
 }
@@ -3418,7 +3420,7 @@ window.viewInvoice=function(id){
     </div>
     <table style="width:100%;border-collapse:collapse;color:#111;font-size:13px">
       <thead><tr style="border-bottom:2px solid #0c7d86;color:#0c7d86;text-align:left"><th style="padding:8px 6px">Article</th><th>État</th><th style="text-align:center">Qté</th><th style="text-align:right">P.U.</th><th style="text-align:right">Montant</th></tr></thead>
-      <tbody>${o.items.map(it=>`<tr style="border-bottom:1px solid #eee"><td style="padding:8px 6px">${esc(it.type)}</td><td style="color:#777">${esc(it.etat)}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">${FCFA(it.prixUnit)}</td><td style="text-align:right;font-weight:600">${FCFA(it.qty*it.prixUnit)}</td></tr>`).join('')}</tbody>
+      <tbody>${o.items.map(it=>`<tr style="border-bottom:1px solid #eee"><td style="padding:8px 6px">${esc(it.type)}${it.prestation==='Repassage'?' (Repassage)':''}</td><td style="color:#777">${esc(it.etat)}</td><td style="text-align:center">${it.qty}</td><td style="text-align:right">${FCFA(it.prixUnit)}</td><td style="text-align:right;font-weight:600">${FCFA(it.qty*it.prixUnit)}</td></tr>`).join('')}</tbody>
     </table>
     <div style="display:flex;justify-content:flex-end;margin-top:16px"><table style="font-size:13px;color:#111;min-width:230px">
       <tr><td style="padding:3px 12px;color:#555">Sous-total</td><td style="text-align:right">${FCFA(brut)}</td></tr>
@@ -3695,8 +3697,8 @@ function renderParametres(){
   <div class="two-col">
     <div class="card card-pad">
       <div class="section-head"><h2>Grille tarifaire</h2><div class="topbar-spacer"></div><button class="btn btn-sm btn-primary" onclick="tarifForm()">${svg('plus')} Ajouter</button></div>
-      <div class="table-wrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Prix (F)</th><th></th></tr></thead>
-      <tbody>${DB.tarifs.map((t,i)=>`<tr data-ttype="${esc(t.type)}"><td>${esc(t.type)}</td><td class="r"><input type="number" value="${t.prix}" data-ttype="${esc(t.type)}" style="width:100px;text-align:right;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:5px 8px;color:var(--ink)" onchange="setTarif(this.dataset.ttype,this.value)"></td><td class="r"><button class="btn btn-sm btn-danger" onclick="deleteTarif(this.closest('tr').dataset.ttype)">${svg('trash')}</button></td></tr>`).join('')}</tbody></table></div>
+      <div class="table-wrap"><table class="tbl"><thead><tr><th>Article</th><th class="r">Nettoyage (F)</th><th class="r">Repassage (F)</th><th></th></tr></thead>
+      <tbody>${DB.tarifs.map((t,i)=>`<tr data-ttype="${esc(t.type)}"><td>${esc(t.type)}</td><td class="r"><input type="number" value="${t.prix}" data-ttype="${esc(t.type)}" style="width:88px;text-align:right;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:5px 8px;color:var(--ink)" onchange="setTarif(this.dataset.ttype,'prix',this.value)"></td><td class="r"><input type="number" value="${t.prixRepassage||0}" data-ttype="${esc(t.type)}" style="width:88px;text-align:right;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:5px 8px;color:var(--ink)" onchange="setTarif(this.dataset.ttype,'prixRepassage',this.value)"></td><td class="r"><button class="btn btn-sm btn-danger" onclick="deleteTarif(this.closest('tr').dataset.ttype)">${svg('trash')}</button></td></tr>`).join('')}</tbody></table></div>
     </div>
     <div>
       <div class="card card-pad" style="margin-bottom:16px">
@@ -3743,21 +3745,23 @@ function renderParametres(){
     <button class="btn btn-primary btn-sm" style="margin-top:14px" onclick="saveNotifConfig()">${svg('check')} Enregistrer les identifiants</button>
   </div>`;
 }
-window.setTarif=async function(type,v){ const prix=parseInt(v)||0; try{ await API.put('/tarifs',{type,prix}); const t=DB.tarifs.find(x=>x.type===type); if(t)t.prix=prix; toast('Tarif mis à jour','good'); }catch(e){ toast(e.message,'err'); } };
+window.setTarif=async function(type,field,v){ const val=parseInt(v)||0; const payload={type}; payload[field]=val; try{ await API.put('/tarifs',payload); const t=DB.tarifs.find(x=>x.type===type); if(t)t[field]=val; toast('Tarif mis à jour','good'); }catch(e){ toast(e.message,'err'); } };
 window.tarifForm=function(){
   openModal(`<div class="modal-head"><h3>Nouvel article</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
-  <div class="modal-body"><div class="form-grid" style="grid-template-columns:1fr 130px">
-    <div class="fld"><label>Type de vêtement *</label><input id="t_type" placeholder="ex. Blouson"></div>
-    <div class="fld"><label>Prix (F) *</label><input type="number" id="t_prix" value="0"></div>
+  <div class="modal-body"><div class="form-grid" style="grid-template-columns:1fr 120px 120px">
+    <div class="fld" style="grid-column:1/-1"><label>Type de vêtement *</label><input id="t_type" placeholder="ex. Blouson"></div>
+    <div class="fld"><label>Prix nettoyage (F) *</label><input type="number" id="t_prix" value="0"></div>
+    <div class="fld"><label>Prix repassage (F)</label><input type="number" id="t_prix_rep" value="0"></div>
   </div></div>
   <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveTarif()">${svg('check')} Ajouter</button></div>`);
 };
 window.saveTarif=async function(){
   const type=document.getElementById('t_type').value.trim();
   const prix=parseInt(document.getElementById('t_prix').value)||0;
+  const prixRepassage=parseInt(document.getElementById('t_prix_rep').value)||0;
   if(!type){ toast('Type requis','err'); return; }
   if(DB.tarifs.some(t=>t.type.toLowerCase()===type.toLowerCase())){ toast('Ce type existe déjà','err'); return; }
-  try{ await API.put('/tarifs',{type,prix}); DB.tarifs.push({type,prix}); closeModal(); renderParametres(); toast('Article ajouté','good'); }
+  try{ await API.put('/tarifs',{type,prix,prixRepassage}); DB.tarifs.push({type,prix,prixRepassage}); closeModal(); renderParametres(); toast('Article ajouté','good'); }
   catch(e){ toast(e.message,'err'); }
 };
 window.deleteTarif=async function(type){

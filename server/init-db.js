@@ -51,7 +51,7 @@ async function main() {
     const tarifs = [['Chemise',500],['Pantalon',700],['Costume 2 pièces',2500],['Robe',1500],['Veste',1200],
       ['Manteau',2000],['Jean',800],['Pull',700],['Drap',1000],['Couette',3500],['Rideau',2500],
       ['Nappe',1200],['Boubou',2000],['Tailleur',2500]];
-    for (const [type, prix] of tarifs) await conn.query('INSERT INTO tarifs (type,prix) VALUES (?,?)', [type, prix]);
+    for (const [type, prix] of tarifs) await conn.query('INSERT INTO tarifs (type,prix,prix_repassage) VALUES (?,?,?)', [type, prix, Math.round(prix * 0.4)]);
     console.log('✓ Grille tarifaire initialisée.');
   }
 

@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   qty       INT         NOT NULL DEFAULT 1,
   etat      VARCHAR(40) DEFAULT 'Normal',
   prix_unit INT         NOT NULL DEFAULT 0,
+  prestation VARCHAR(20) DEFAULT 'Nettoyage',
   KEY idx_items_order (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -101,7 +102,8 @@ CREATE TABLE IF NOT EXISTS stock (
 
 CREATE TABLE IF NOT EXISTS tarifs (
   type VARCHAR(80) NOT NULL PRIMARY KEY,
-  prix INT         NOT NULL DEFAULT 0
+  prix INT         NOT NULL DEFAULT 0,
+  prix_repassage INT NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS settings (

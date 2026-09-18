@@ -8,7 +8,7 @@ const EXPIRES = '12h';
 // Modules accessibles par rôle (doit rester aligné avec le frontend)
 const ROLE_ACCESS = {
   'Administrateur': ['dashboard','clients','commandes','production','facturation','finances','employes','utilisateurs','stocks','parametres'],
-  'Caissier': ['dashboard','clients','commandes','facturation'],
+  'Caissier': ['dashboard','clients','commandes','production','facturation'],
   'Agent de réception': ['dashboard','clients','commandes','production'],
   'Responsable de production': ['dashboard','production','commandes','stocks']
 };

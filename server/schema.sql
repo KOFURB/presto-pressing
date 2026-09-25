@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS orders (
   notes      TEXT,
   created_at DATE         DEFAULT NULL,
   livre_at   DATE         DEFAULT NULL,
+  created_by VARCHAR(120) DEFAULT NULL,
   KEY idx_orders_agency (agency_id),
   KEY idx_orders_client (client_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS order_items (
   etat      VARCHAR(40) DEFAULT 'Normal',
   prix_unit INT         NOT NULL DEFAULT 0,
   prestation VARCHAR(20) DEFAULT 'Nettoyage',
+  couleur   VARCHAR(40) DEFAULT NULL,
   KEY idx_items_order (order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

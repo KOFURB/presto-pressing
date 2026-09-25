@@ -245,7 +245,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .toast.good{background:var(--good)} .toast.err{background:var(--crit)}
 @keyframes slideIn{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 .items-editor{display:flex;flex-direction:column;gap:8px}
-.item-row{display:grid;grid-template-columns:1.2fr 112px 58px 92px 96px 30px;gap:7px;align-items:center}
+.item-row{display:grid;grid-template-columns:1.15fr 104px 92px 52px 84px 90px 28px;gap:7px;align-items:center}
 .item-row.head{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
 .item-row input,.item-row select{padding:7px 9px}
 .mini-x{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;width:32px;height:32px;display:grid;place-items:center;color:var(--crit)}
@@ -267,7 +267,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 @media (max-width:560px){
   .view{padding:16px 14px 60px}
   .topbar{padding:12px 14px}
-  .item-row{grid-template-columns:1.1fr 92px 44px 74px 74px 26px;gap:5px}
+  .item-row{grid-template-columns:1fr 82px 74px 40px 66px 70px 24px;gap:5px}
   .agency-select .lbl{display:none}
 }
 @media print{
@@ -3041,7 +3041,7 @@ window.clientForm=function(id){
   <div class="modal-body"><div class="form-grid" style="grid-template-columns:1fr 1fr">
     <div class="fld"><label>Prénom *</label><input id="f_prenom" value="${esc(c.prenom)}"></div>
     <div class="fld"><label>Nom *</label><input id="f_nom" value="${esc(c.nom)}"></div>
-    <div class="fld"><label>Téléphone *</label><input id="f_tel" value="${esc(c.tel)}" placeholder="07 08 …"></div>
+    <div class="fld"><label>Téléphone *</label><input id="f_tel" value="${esc(c.tel)}" maxlength="10" inputmode="numeric" placeholder="10 chiffres" oninput="this.value=this.value.replace(/\\D/g,'').slice(0,10)"></div>
     <div class="fld"><label>Email</label><input id="f_email" value="${esc(c.email||'')}" placeholder="optionnel"></div>
     <div class="fld" style="grid-column:1/-1"><label>Adresse / Quartier</label><input id="f_adresse" value="${esc(c.adresse||'')}"></div>
     ${id?`<div class="fld"><label>Points fidélité</label><input id="f_points" type="number" value="${c.points}"></div>`:''}
@@ -3051,7 +3051,9 @@ window.clientForm=function(id){
 window.saveClient=async function(id){
   const g=x=>document.getElementById(x).value.trim();
   if(!g('f_prenom')||!g('f_nom')||!g('f_tel')){ toast('Prénom, nom et téléphone requis','err'); return; }
-  const payload={agencyId:curAgency(),prenom:g('f_prenom'),nom:g('f_nom'),tel:g('f_tel'),email:g('f_email'),adresse:g('f_adresse')};
+  const telDigits=g('f_tel').replace(/\D/g,'');
+  if(telDigits.length!==10){ toast('Le téléphone doit comporter exactement 10 chiffres','err'); return; }
+  const payload={agencyId:curAgency(),prenom:g('f_prenom'),nom:g('f_nom'),tel:telDigits,email:g('f_email'),adresse:g('f_adresse')};
   try{
     if(id){ payload.points=parseInt(document.getElementById('f_points').value)||0; const c=await API.put('/clients/'+id,payload); replaceIn(DB.clients,c); toast('Client mis à jour','good'); }
     else{ const c=await API.post('/clients',payload); DB.clients.push(c); toast('Client créé','good'); }
@@ -3118,6 +3120,7 @@ function renderCommandes(){
           ${o.status==='Prêt'?`<button class="btn btn-sm" onclick="remindSMS('${o.id}')" title="Rappel SMS de retrait">${svg('bell')}</button>`:''}
           <button class="btn btn-sm" onclick="viewReceipt('${o.id}')" title="Reçu">${svg('receipt')}</button>
           <button class="btn btn-sm btn-ghost" onclick="orderForm('${o.id}')" title="Modifier">${svg('edit')}</button>
+          ${curUser().role==='Administrateur'?`<button class="btn btn-sm btn-ghost btn-danger" onclick="deleteOrder('${o.id}')" title="Supprimer la commande">${svg('trash')}</button>`:''}
         </div></td></tr>`;}).join('')
       :`<tr><td colspan="9"><div class="empty">${svg('commandes')}<div>Aucune commande</div></div></td></tr>`}
     </tbody></table></div></div>`;
@@ -3125,6 +3128,16 @@ function renderCommandes(){
   s.oninput=()=>{ orderSearch=s.value; const p=s.selectionStart; renderCommandes(); const ns=document.getElementById('oSearch'); ns.focus(); ns.setSelectionRange(p,p); };
 }
 window.setOF=v=>{ orderFilter=v; renderCommandes(); };
+window.deleteOrder=function(id){
+  const o=DB.orders.find(x=>x.id===id); if(!o) return;
+  openModal(`<div class="modal-head"><h3>Supprimer la commande ?</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
+  <div class="modal-body"><p>Supprimer définitivement la commande <b>${esc(o.num)}</b> de <b>${esc(clientName(o.clientId))}</b> ?</p><p class="page-sub" style="margin-top:8px">Cette action est irréversible.</p></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger" onclick="doDeleteOrder('${id}')">${svg('trash')} Supprimer</button></div>`);
+};
+window.doDeleteOrder=async function(id){
+  try{ await API.del('/orders/'+id); removeIn(DB.orders,id); closeModal(); renderCommandes(); renderNav(); toast('Commande supprimée','good'); }
+  catch(e){ toast(e.message,'err'); }
+};
 window.remindSMS=async function(id){
   try{ await API.post('/orders/'+id+'/remind',{}); toast('SMS de rappel envoyé au client','good'); }
   catch(e){ toast('SMS : '+e.message,'err'); }
@@ -3149,7 +3162,7 @@ window.emailInvoice=async function(id){
 };
 
 window.orderForm=function(id,presetClient){
-  const o=id?DB.orders.find(x=>x.id===id):{clientId:presetClient||'',items:[{type:'Chemise',qty:1,etat:'Normal',prestation:'Nettoyage',prixUnit:priceFor('Chemise','Nettoyage')}],depotDate:todayISO(),dueDate:addDays(todayISO(),3),status:'Reçu',prodStage:'Réception',remise:0,paye:0,notes:''};
+  const o=id?DB.orders.find(x=>x.id===id):{clientId:presetClient||'',items:[{type:'Chemise',qty:1,etat:'Normal',prestation:'Nettoyage',couleur:'',prixUnit:priceFor('Chemise','Nettoyage')}],depotDate:todayISO(),dueDate:addDays(todayISO(),3),status:'Reçu',prodStage:'Réception',remise:0,paye:0,notes:''};
   const clients=inAgency(DB.clients).sort((a,b)=>a.nom.localeCompare(b.nom));
   openModal(`<div class="modal-head"><h3>${id?'Modifier la commande '+o.num:'Nouvelle commande'}</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
   <div class="modal-body">
@@ -3188,6 +3201,7 @@ function renderItemRows(){
   wrap.innerHTML=window._items.map((it,i)=>`<div class="item-row">
     <select onchange="itemChange(${i},'type',this.value)">${DB.tarifs.map(x=>x.type).map(t=>`<option ${t===it.type?'selected':''}>${t}</option>`).join('')}</select>
     <select onchange="itemChange(${i},'prestation',this.value)">${['Nettoyage','Repassage'].map(pr=>`<option ${pr===(it.prestation||'Nettoyage')?'selected':''}>${pr}</option>`).join('')}</select>
+    <input type="text" placeholder="Couleur" value="${esc(it.couleur||'')}" onchange="itemChange(${i},'couleur',this.value)">
     <input type="number" min="1" value="${it.qty}" onchange="itemChange(${i},'qty',this.value)">
     <select onchange="itemChange(${i},'etat',this.value)">${['Normal','Délicat','Très sale'].map(e=>`<option ${e===it.etat?'selected':''}>${e}</option>`).join('')}</select>
     <input type="number" class="r" value="${it.prixUnit}" onchange="itemChange(${i},'prixUnit',this.value)">
@@ -3195,7 +3209,7 @@ function renderItemRows(){
   </div>`).join('');
   recalcOrder();
 }
-window.addItemRow=()=>{ window._items.push({type:'Pantalon',qty:1,etat:'Normal',prestation:'Nettoyage',prixUnit:priceFor('Pantalon','Nettoyage')}); renderItemRows(); };
+window.addItemRow=()=>{ window._items.push({type:'Pantalon',qty:1,etat:'Normal',prestation:'Nettoyage',couleur:'',prixUnit:priceFor('Pantalon','Nettoyage')}); renderItemRows(); };
 window.removeItem=i=>{ window._items.splice(i,1); renderItemRows(); };
 window.itemChange=(i,k,v)=>{ if(k==='qty'||k==='prixUnit') v=parseInt(v)||0; window._items[i][k]=v; if(k==='type'||k==='prestation') window._items[i].prixUnit=priceFor(window._items[i].type, window._items[i].prestation||'Nettoyage'); if(k==='type'||k==='prestation') renderItemRows(); else recalcOrder(); };
 window.recalcOrder=()=>{ const brut=window._items.reduce((s,it)=>s+it.qty*it.prixUnit,0); const rem=parseInt(document.getElementById('o_remise').value)||0; document.getElementById('o_total').textContent=FCFA(Math.max(0,brut-rem)); };
@@ -3235,9 +3249,10 @@ window.viewReceipt=function(id){
       <tr><td>Client</td><td style="text-align:right">${esc(c?c.prenom+' '+c.nom:'—')}</td></tr>
       <tr><td>Tél</td><td style="text-align:right">${esc(c?c.tel:'')}</td></tr>
       <tr><td>Dépôt</td><td style="text-align:right">${fdate(o.depotDate)}</td></tr>
-      <tr><td>Livraison</td><td style="text-align:right">${fdate(o.dueDate)}</td></tr></table>
+      <tr><td>Livraison</td><td style="text-align:right">${fdate(o.dueDate)}</td></tr>
+      ${o.createdBy?`<tr><td>Caissier</td><td style="text-align:right">${esc(o.createdBy)}</td></tr>`:''}</table>
     <div class="r-line"></div>
-    <table>${o.items.map(it=>`<tr><td>${it.qty}× ${esc(it.type)}${it.prestation==='Repassage'?' (Repassage)':''}<div style="font-size:10px;color:#666 !important">${esc(it.etat)}</div></td><td style="text-align:right">${FCFA(it.qty*it.prixUnit)}</td></tr>`).join('')}</table>
+    <table>${o.items.map(it=>`<tr><td>${it.qty}× ${esc(it.type)}${it.prestation==='Repassage'?' (Repassage)':''}<div style="font-size:10px;color:#666 !important">${esc(it.etat)}${it.couleur?' · '+esc(it.couleur):''}</div></td><td style="text-align:right">${FCFA(it.qty*it.prixUnit)}</td></tr>`).join('')}</table>
     <div class="r-line"></div>
     <table>
       <tr><td>Sous-total</td><td style="text-align:right">${FCFA(brut)}</td></tr>
@@ -3250,6 +3265,7 @@ window.viewReceipt=function(id){
     <div class="qr-box" id="qrBox"></div>
     <div class="rc-center" style="font-size:10px">Présentez ce code pour retirer votre linge</div>
     <div class="rc-center" style="font-size:11px;margin-top:6px">Merci de votre confiance !</div>
+    <div class="rc-center" style="font-size:11px;margin-top:2px">Votre avis nous intéresse !</div>
   </div></div></div>
   <div class="modal-foot no-print">
     <button class="btn" onclick="notifyClient('${o.clientId}','pret','${o.id}')">${svg('whatsapp')} Notifier</button>

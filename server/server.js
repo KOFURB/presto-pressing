@@ -28,8 +28,8 @@ const mapExpense = r => ({ id: r.id, agencyId: r.agency_id, date: r.date, catego
 const mapStock = r => ({ id: r.id, agencyId: r.agency_id, nom: r.nom, categorie: r.categorie, qty: r.qty, seuil: r.seuil, unite: r.unite });
 const mapUser = r => ({ id: r.id, nom: r.nom, login: r.login, role: r.role, actif: !!r.actif });
 const mapAgency = r => ({ id: r.id, name: r.name, ville: r.ville, tel: r.tel });
-const mapOrder = (r, items) => ({ id: r.id, num: r.num, agencyId: r.agency_id, clientId: r.client_id, depotDate: r.depot_date, dueDate: r.due_date, status: r.status, prodStage: r.prod_stage, remise: r.remise, montant: r.montant, paye: r.paye, notes: r.notes, createdAt: r.created_at, livreAt: r.livre_at, items: items || [] });
-const mapItem = r => ({ type: r.type, qty: r.qty, etat: r.etat, prixUnit: r.prix_unit, prestation: r.prestation || 'Nettoyage' });
+const mapOrder = (r, items) => ({ id: r.id, num: r.num, agencyId: r.agency_id, clientId: r.client_id, depotDate: r.depot_date, dueDate: r.due_date, status: r.status, prodStage: r.prod_stage, remise: r.remise, montant: r.montant, paye: r.paye, notes: r.notes, createdAt: r.created_at, livreAt: r.livre_at, createdBy: r.created_by || '', items: items || [] });
+const mapItem = r => ({ type: r.type, qty: r.qty, etat: r.etat, prixUnit: r.prix_unit, prestation: r.prestation || 'Nettoyage', couleur: r.couleur || '' });
 
 async function getSetting(k, def) { const [r] = await pool.query('SELECT v FROM settings WHERE k=?', [k]); return r.length ? r[0].v : def; }
 async function setSetting(k, v) { await pool.query('INSERT INTO settings (k,v) VALUES (?,?) ON DUPLICATE KEY UPDATE v=VALUES(v)', [k, String(v)]); }
@@ -187,6 +187,7 @@ app.get('/api/bootstrap', authRequired, ah(async (req, res) => {
 app.post('/api/clients', authRequired, requireModule('clients'), ah(async (req, res) => {
   const b = req.body || {};
   if (!b.prenom || !b.nom || !b.tel) return res.status(400).json({ error: 'Prénom, nom et téléphone requis' });
+  if (String(b.tel).replace(/\D/g, '').length !== 10) return res.status(400).json({ error: 'Le téléphone doit comporter exactement 10 chiffres' });
   const id = 'c' + uid();
   await pool.query('INSERT INTO clients (id,agency_id,nom,prenom,tel,email,adresse,points,created_at) VALUES (?,?,?,?,?,?,?,0,?)',
     [id, b.agencyId, b.nom, b.prenom, b.tel, b.email || '', b.adresse || '', todayISO()]);
@@ -196,6 +197,7 @@ app.post('/api/clients', authRequired, requireModule('clients'), ah(async (req, 
 
 app.put('/api/clients/:id', authRequired, requireModule('clients'), ah(async (req, res) => {
   const b = req.body || {};
+  if (b.tel !== undefined && String(b.tel).replace(/\D/g, '').length !== 10) return res.status(400).json({ error: 'Le téléphone doit comporter exactement 10 chiffres' });
   await pool.query('UPDATE clients SET nom=?,prenom=?,tel=?,email=?,adresse=?,points=? WHERE id=?',
     [b.nom, b.prenom, b.tel, b.email || '', b.adresse || '', Number(b.points) || 0, req.params.id]);
   const [r] = await pool.query('SELECT * FROM clients WHERE id=?', [req.params.id]);
@@ -217,11 +219,11 @@ app.post('/api/orders', authRequired, requireModule('commandes'), ah(async (req,
   const paye = Math.min(montant, Number(b.paye) || 0);
   const status = b.status || 'Reçu';
   const id = uid();
-  await pool.query('INSERT INTO orders (id,num,agency_id,client_id,depot_date,due_date,status,prod_stage,remise,montant,paye,notes,created_at,livre_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [id, num, b.agencyId, b.clientId, b.depotDate, b.dueDate, status, b.prodStage || 'Réception', Number(b.remise) || 0, montant, paye, b.notes || '', todayISO(), status === 'Livré' ? todayISO() : null]);
+  await pool.query('INSERT INTO orders (id,num,agency_id,client_id,depot_date,due_date,status,prod_stage,remise,montant,paye,notes,created_at,livre_at,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [id, num, b.agencyId, b.clientId, b.depotDate, b.dueDate, status, b.prodStage || 'Réception', Number(b.remise) || 0, montant, paye, b.notes || '', todayISO(), status === 'Livré' ? todayISO() : null, req.user.nom || req.user.login || '']);
   for (const it of items) {
-    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit,prestation) VALUES (?,?,?,?,?,?)',
-      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0, it.prestation || 'Nettoyage']);
+    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit,prestation,couleur) VALUES (?,?,?,?,?,?,?)',
+      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0, it.prestation || 'Nettoyage', it.couleur || '']);
   }
   // fidélité
   const rate = Number(await getSetting('loyaltyRate', '1000')) || 1000;
@@ -248,11 +250,20 @@ app.put('/api/orders/:id', authRequired, requireModule('commandes'), ah(async (r
     [b.clientId, b.depotDate, b.dueDate, status, b.prodStage, Number(b.remise) || 0, montant, paye, b.notes || '', livreAt, id]);
   await pool.query('DELETE FROM order_items WHERE order_id=?', [id]);
   for (const it of items) {
-    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit,prestation) VALUES (?,?,?,?,?,?)',
-      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0, it.prestation || 'Nettoyage']);
+    await pool.query('INSERT INTO order_items (order_id,type,qty,etat,prix_unit,prestation,couleur) VALUES (?,?,?,?,?,?,?)',
+      [id, it.type, Number(it.qty) || 1, it.etat || 'Normal', Number(it.prixUnit) || 0, it.prestation || 'Nettoyage', it.couleur || '']);
   }
   if (status === 'Prêt' && ex[0].status !== 'Prêt') { orderSMS(id, 'ready').catch(()=>{}); }
   res.json(await fetchOrderFull(id));
+}));
+
+app.delete('/api/orders/:id', authRequired, requireAdmin, ah(async (req, res) => {
+  const id = req.params.id;
+  const [ex] = await pool.query('SELECT * FROM orders WHERE id=?', [id]);
+  if (!ex.length) return res.status(404).json({ error: 'Commande introuvable' });
+  await pool.query('DELETE FROM order_items WHERE order_id=?', [id]);
+  await pool.query('DELETE FROM orders WHERE id=?', [id]);
+  res.json({ ok: true });
 }));
 
 app.patch('/api/orders/:id/pay', authRequired, requireModule('facturation'), ah(async (req, res) => {

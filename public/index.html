@@ -3175,7 +3175,7 @@ window.orderForm=function(id,presetClient){
     </div>
     <label style="font-size:12px;font-weight:600;color:var(--ink-soft)">Articles déposés</label>
     <div class="items-editor" id="itemsEditor" style="margin:8px 0 4px">
-      <div class="item-row head"><span>Article</span><span>Prestation</span><span>Qté</span><span>État</span><span class="r">Prix</span><span></span></div>
+      <div class="item-row head"><span>Article</span><span>Prestation</span><span>Couleur</span><span>Qté</span><span>État</span><span class="r">Prix</span><span></span></div>
       <div id="itemRows"></div>
     </div>
     <button class="btn btn-sm btn-ghost" onclick="addItemRow()">${svg('plus')} Ajouter un article</button>
@@ -3300,7 +3300,7 @@ window.notifyClient=function(clientId,kind,orderId){
   const c=clientById(clientId); if(!c){ toast('Client introuvable','err'); return; }
   const ag=DB.agencies.find(a=>a.id===curAgency());
   let msg='';
-  if(kind==='pret'){ const o=DB.orders.find(x=>x.id===orderId); msg=`Bonjour ${c.prenom}, votre commande ${o?o.num:''} chez ${ag.name} est prête ✅. Montant restant : ${FCFA(orderId?orderReste(o):0)}. Merci !`; }
+  if(kind==='pret'){ const o=DB.orders.find(x=>x.id===orderId); const etat = o&&o.status==='Prêt' ? 'est prête ✅' : o&&o.status==='Livré' ? 'a été livrée ✅' : o&&o.status==='En cours' ? 'est en cours de traitement 🧺' : 'a été reçue ✅'; msg=`Bonjour ${c.prenom}, votre commande ${o?o.num:''} chez ${ag.name} ${etat}. Montant restant : ${FCFA(orderId?orderReste(o):0)}. Merci !`; }
   else if(kind==='fidelite'){ msg=`Bonjour ${c.prenom}, merci de votre fidélité chez ${ag.name} ! Vous avez ${c.points} points. À bientôt 👕`; }
   else msg=`Bonjour ${c.prenom}, message de ${ag.name}.`;
   const tel=(c.tel||'').replace(/\D/g,''); const intl= tel.startsWith('225')?tel:('225'+tel);

@@ -3004,6 +3004,18 @@ function renderDashboard(){
 
 /* ============ CLIENTS ============ */
 let clientSearch='';
+window.deleteClient=function(id){
+  const c=clientById(id); if(!c) return;
+  const oc=DB.orders.filter(o=>o.clientId===id);
+  if(oc.length>0){ toast('Ce client a des commandes et ne peut pas être supprimé','err'); return; }
+  openModal(`<div class="modal-head"><h3>Supprimer le client ?</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
+  <div class="modal-body"><p>Supprimer définitivement le client <b>${esc(c.prenom)} ${esc(c.nom)}</b> ?</p><p class="page-sub" style="margin-top:8px">Possible uniquement car ce client n'a aucune commande. Action irréversible.</p></div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-danger" onclick="doDeleteClient('${id}')">${svg('trash')} Supprimer</button></div>`);
+};
+window.doDeleteClient=async function(id){
+  try{ await API.del('/clients/'+id); removeIn(DB.clients,id); closeModal(); renderClients(); toast('Client supprimé','good'); }
+  catch(e){ toast(e.message,'err'); }
+};
 function renderClients(){
   let clients=inAgency(DB.clients);
   if(clientSearch){ const q=clientSearch.toLowerCase(); clients=clients.filter(c=>(c.prenom+' '+c.nom+' '+c.tel+' '+(c.adresse||'')).toLowerCase().includes(q)); }
@@ -3029,6 +3041,7 @@ function renderClients(){
         <td class="r"><div style="display:inline-flex;gap:6px">
           <button class="btn btn-sm" onclick="clientHistory('${c.id}')">${svg('clock')} Historique</button>
           <button class="btn btn-sm btn-ghost" onclick="clientForm('${c.id}')" title="Modifier">${svg('edit')}</button>
+          ${oc.length===0?`<button class="btn btn-sm btn-ghost btn-danger" onclick="deleteClient('${c.id}')" title="Supprimer le client">${svg('trash')}</button>`:''}
         </div></td></tr>`;}).join('')
       :`<tr><td colspan="6"><div class="empty">${svg('clients')}<div>Aucun client trouvé</div></div></td></tr>`}
     </tbody></table></div></div>`;

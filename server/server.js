@@ -205,6 +205,16 @@ app.put('/api/clients/:id', authRequired, requireModule('clients'), ah(async (re
   res.json(mapClient(r[0]));
 }));
 
+app.delete('/api/clients/:id', authRequired, requireModule('clients'), ah(async (req, res) => {
+  const id = req.params.id;
+  const [c] = await pool.query('SELECT id FROM clients WHERE id=?', [id]);
+  if (!c.length) return res.status(404).json({ error: 'Client introuvable' });
+  const [cnt] = await pool.query('SELECT COUNT(*) AS n FROM orders WHERE client_id=?', [id]);
+  if (cnt[0].n > 0) return res.status(400).json({ error: 'Impossible : ce client a déjà des commandes. Supprimez-les d\'abord.' });
+  await pool.query('DELETE FROM clients WHERE id=?', [id]);
+  res.json({ ok: true });
+}));
+
 // ============ ORDERS ============
 app.post('/api/orders', authRequired, requireModule('commandes'), ah(async (req, res) => {
   const b = req.body || {};

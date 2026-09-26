@@ -2926,9 +2926,37 @@ document.getElementById('hamb').onclick=()=>{ document.getElementById('sidebar')
 document.getElementById('scrim').onclick=()=>{ document.getElementById('sidebar').classList.remove('open'); document.getElementById('scrim').classList.remove('open'); };
 
 /* ============ DASHBOARD ============ */
+let dashFrom=null, dashTo=null;
+window.setDashPeriod=function(kind){
+  const t=todayISO();
+  if(kind==='today'){ dashFrom=t; dashTo=t; }
+  else if(kind==='7'){ dashFrom=addDays(t,-6); dashTo=t; }
+  else if(kind==='30'){ dashFrom=addDays(t,-29); dashTo=t; }
+  else if(kind==='month'){ dashFrom=t.slice(0,7)+'-01'; dashTo=t; }
+  else if(kind==='all'){ dashFrom='2000-01-01'; dashTo=t; }
+  renderDashboard();
+};
+window.setDashDate=function(which,val){ if(!val) return; if(which==='from') dashFrom=val; else dashTo=val; if(dashFrom>dashTo){ if(which==='from') dashTo=val; else dashFrom=val; } renderDashboard(); };
+function dashPeriodKind(){
+  const t=todayISO();
+  if(dashFrom===t&&dashTo===t) return 'today';
+  if(dashFrom===addDays(t,-6)&&dashTo===t) return '7';
+  if(dashFrom===addDays(t,-29)&&dashTo===t) return '30';
+  if(dashFrom===t.slice(0,7)+'-01'&&dashTo===t) return 'month';
+  if(dashFrom==='2000-01-01'&&dashTo===t) return 'all';
+  return '';
+}
 function renderDashboard(){
   const orders=inAgency(DB.orders);
   const today=todayISO();
+  if(!dashFrom) dashFrom=today; if(!dashTo) dashTo=today;
+  const encOrders=orders.filter(o=>o.depotDate&&o.depotDate>=dashFrom&&o.depotDate<=dashTo);
+  const encaisse=encOrders.reduce((s,o)=>s+(o.paye||0),0);
+  const factureP=encOrders.reduce((s,o)=>s+(o.montant||0),0);
+  const resteP=encOrders.reduce((s,o)=>s+orderReste(o),0);
+  const pk=dashPeriodKind();
+  const presetBtn=(k,lbl)=>`<button class="btn btn-sm ${pk===k?'btn-primary':'btn-ghost'}" onclick="setDashPeriod('${k}')">${lbl}</button>`;
+  const periodLabel = dashFrom===dashTo ? fdate(dashFrom) : (fdate(dashFrom)+' → '+fdate(dashTo));
   const ongoing=orders.filter(o=>o.status==='En cours'||o.status==='Reçu');
   const ready=orders.filter(o=>o.status==='Prêt');
   const caToday=orders.filter(o=>o.status==='Livré'&&o.livreAt===today).reduce((s,o)=>s+o.montant,0)
@@ -2954,6 +2982,23 @@ function renderDashboard(){
     ${kpi('check','var(--good)','Commandes prêtes',ready.length,`<div class="kpi-delta up">Prêtes à livrer</div>`)}
     ${kpi('money','var(--accent)','Chiffre d’affaires du jour','<span class="tnum">'+FCFA(caToday)+'</span>',`<div class="kpi-delta flat">Mois : ${FCFA(caMonth)}</div>`)}
     ${kpi('alert','var(--crit)','Reste à encaisser','<span class="tnum">'+FCFA(impayes)+'</span>',`<div class="kpi-delta ${impayes>0?'down':'flat'}">${orders.filter(o=>orderReste(o)>0).length} commande(s)</div>`)}
+  </div>
+
+  <div class="card card-pad" style="margin-bottom:18px">
+    <div class="section-head"><h2>Encaissement par période</h2><div class="topbar-spacer"></div>
+      <div style="display:inline-flex;gap:6px;flex-wrap:wrap">${presetBtn('today','Aujourd’hui')}${presetBtn('7','7 jours')}${presetBtn('30','30 jours')}${presetBtn('month','Ce mois')}${presetBtn('all','Tout')}</div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin:6px 0 14px">
+      <div class="fld" style="margin:0"><label>Du</label><input type="date" value="${dashFrom}" max="${dashTo}" onchange="setDashDate('from',this.value)"></div>
+      <div class="fld" style="margin:0"><label>Au</label><input type="date" value="${dashTo}" onchange="setDashDate('to',this.value)"></div>
+      <span class="tag">${periodLabel}</span>
+    </div>
+    <div class="stat-inline">
+      <div class="si"><span class="si-val tnum" style="color:var(--accent-2);font-size:24px">${FCFA(encaisse)}</span><span class="si-lbl">Encaissé (payé)</span></div>
+      <div class="si"><span class="si-val tnum">${FCFA(factureP)}</span><span class="si-lbl">Facturé</span></div>
+      <div class="si"><span class="si-val tnum">${FCFA(resteP)}</span><span class="si-lbl">Reste à encaisser</span></div>
+      <div class="si"><span class="si-val tnum">${encOrders.length}</span><span class="si-lbl">Commande(s)</span></div>
+    </div>
   </div>
 
   <div class="two-col">

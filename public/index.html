@@ -249,6 +249,9 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
 .item-row.head{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
 .item-row input,.item-row select{padding:7px 9px}
 .mini-x{border:1px solid var(--line);background:var(--surface-2);border-radius:8px;width:32px;height:32px;display:grid;place-items:center;color:var(--crit)}
+.exp-row{display:grid;grid-template-columns:140px 160px 1fr 110px 32px;gap:8px;align-items:center}
+.exp-row.head{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
+.exp-row input,.exp-row select{padding:7px 9px}
 .money-strong{font-family:var(--display);font-weight:700}
 .role-note{font-size:12px;color:var(--muted);background:var(--surface-2);border:1px dashed var(--line);border-radius:10px;padding:10px 12px}
 .chip-row{display:flex;gap:7px;flex-wrap:wrap}
@@ -268,6 +271,7 @@ table.tbl{width:100%;border-collapse:collapse;font-size:13.5px}
   .view{padding:16px 14px 60px}
   .topbar{padding:12px 14px}
   .item-row{grid-template-columns:1fr 82px 74px 40px 66px 70px 24px;gap:5px}
+  .exp-row{grid-template-columns:88px 92px 1fr 70px 22px;gap:4px}
   .agency-select .lbl{display:none}
 }
 @media print{
@@ -3555,22 +3559,49 @@ function renderFinances(){
     </div>
   </div>`;
 }
+const EXP_CATS=['Salaires','Lessive & produits','Loyer','Électricité','Eau','Emballages','Transport','Maintenance','Autre'];
 window.expenseForm=function(){
-  const cats=['Salaires','Lessive & produits','Loyer','Électricité','Eau','Emballages','Transport','Maintenance','Autre'];
+  window._exps=[{date:todayISO(),cat:EXP_CATS[0],lib:'',mnt:0}];
   openModal(`<div class="modal-head"><h3>Nouvelle dépense</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
-  <div class="modal-body"><div class="form-grid" style="grid-template-columns:1fr 1fr">
-    <div class="fld"><label>Date</label><input type="date" id="e_date" value="${todayISO()}"></div>
-    <div class="fld"><label>Catégorie</label><select id="e_cat">${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
-    <div class="fld" style="grid-column:1/-1"><label>Libellé</label><input id="e_lib" placeholder="Description"></div>
-    <div class="fld"><label>Montant (F)</label><input type="number" id="e_mnt" value="0"></div>
-  </div></div>
-  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveExpense()">${svg('check')} Enregistrer</button></div>`);
+  <div class="modal-body">
+    <label style="font-size:12px;font-weight:600;color:var(--ink-soft)">Dépenses à enregistrer</label>
+    <div class="items-editor" style="margin:8px 0 4px">
+      <div class="exp-row head"><span>Date</span><span>Catégorie</span><span>Libellé</span><span class="r">Montant (F)</span><span></span></div>
+      <div id="expRows"></div>
+    </div>
+    <button class="btn btn-sm btn-ghost" onclick="addExpRow()">${svg('plus')} Ajouter une ligne</button>
+    <div class="divider"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;font-size:15px">
+      <span style="color:var(--ink-soft)">Total</span>
+      <span class="money-strong tnum" id="expTotal" style="font-size:20px;color:var(--accent-2)">0 F</span>
+    </div>
+  </div>
+  <div class="modal-foot"><button class="btn btn-ghost" onclick="closeModal()">Annuler</button><button class="btn btn-primary" onclick="saveExpense()">${svg('check')} Enregistrer</button></div>`,true);
+  renderExpRows();
 };
+function renderExpRows(){
+  const wrap=document.getElementById('expRows');
+  wrap.innerHTML=window._exps.map((e,i)=>`<div class="exp-row">
+    <input type="date" value="${e.date}" onchange="expChange(${i},'date',this.value)">
+    <select onchange="expChange(${i},'cat',this.value)">${EXP_CATS.map(c=>`<option ${c===e.cat?'selected':''}>${c}</option>`).join('')}</select>
+    <input type="text" class="exp-lib" placeholder="Description" value="${esc(e.lib||'')}" onchange="expChange(${i},'lib',this.value)">
+    <input type="number" class="r" value="${e.mnt}" onchange="expChange(${i},'mnt',this.value)">
+    <button class="mini-x" onclick="removeExpRow(${i})" ${window._exps.length<=1?'style="opacity:.4;pointer-events:none"':''}>${svg('trash')}</button>
+  </div>`).join('');
+  recalcExp();
+}
+window.addExpRow=()=>{ window._exps.push({date:todayISO(),cat:EXP_CATS[0],lib:'',mnt:0}); renderExpRows(); };
+window.removeExpRow=i=>{ window._exps.splice(i,1); renderExpRows(); };
+window.expChange=(i,k,v)=>{ if(k==='mnt') v=parseInt(v)||0; window._exps[i][k]=v; if(k==='mnt') recalcExp(); };
+function recalcExp(){ const t=window._exps.reduce((s,e)=>s+(parseInt(e.mnt)||0),0); const el=document.getElementById('expTotal'); if(el) el.textContent=FCFA(t); }
 window.saveExpense=async function(){
-  const g=x=>document.getElementById(x).value;
-  const mnt=parseInt(g('e_mnt'))||0; if(mnt<=0){ toast('Montant invalide','err'); return; }
-  try{ const e=await API.post('/expenses',{agencyId:curAgency(),date:g('e_date'),categorie:g('e_cat'),libelle:g('e_lib')||g('e_cat'),montant:mnt}); DB.expenses.push(e); closeModal(); renderFinances(); toast('Dépense enregistrée','good'); }
-  catch(err){ toast(err.message,'err'); }
+  const rows=window._exps.filter(e=>(parseInt(e.mnt)||0)>0);
+  if(!rows.length){ toast('Ajoutez au moins une dépense avec un montant','err'); return; }
+  try{
+    let n=0;
+    for(const e of rows){ const saved=await API.post('/expenses',{agencyId:curAgency(),date:e.date,categorie:e.cat,libelle:e.lib||e.cat,montant:parseInt(e.mnt)||0}); DB.expenses.push(saved); n++; }
+    closeModal(); renderFinances(); toast(n>1?`${n} dépenses enregistrées`:'Dépense enregistrée','good');
+  }catch(err){ toast(err.message,'err'); }
 };
 window.printReport=function(period){
   const orders=inAgency(DB.orders); const expenses=inAgency(DB.expenses); const ag=DB.agencies.find(a=>a.id===curAgency());

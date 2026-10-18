@@ -55,6 +55,13 @@ async function main() {
     console.log('✓ Grille tarifaire initialisée.');
   }
 
+  const [ecRows] = await conn.query('SELECT COUNT(*) AS n FROM expense_categories');
+  if (ecRows[0].n === 0) {
+    const cats = ['Salaires', 'Lessive & produits', 'Loyer', 'Électricité', 'Eau', 'Emballages', 'Transport', 'Maintenance', 'Autre'];
+    for (const nom of cats) await conn.query('INSERT INTO expense_categories (nom) VALUES (?)', [nom]);
+    console.log('✓ Catégories de dépenses initialisées.');
+  }
+
   const [sRows] = await conn.query('SELECT COUNT(*) AS n FROM settings');
   if (sRows[0].n === 0) {
     const settings = { loyaltyRate: '1000', smsProvider: 'HSMS.CI', shopName: 'Presto Pressing', seq: '0' };

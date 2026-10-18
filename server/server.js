@@ -160,6 +160,7 @@ app.get('/api/bootstrap', authRequired, ah(async (req, res) => {
   const [expenses] = await pool.query('SELECT * FROM expenses');
   const [stock] = await pool.query('SELECT * FROM stock');
   const [tarifs] = await pool.query('SELECT * FROM tarifs');
+  const [expCats] = await pool.query('SELECT nom FROM expense_categories ORDER BY nom');
   const [settingsRows] = await pool.query('SELECT * FROM settings');
 
   const itemsByOrder = {};
@@ -178,6 +179,7 @@ app.get('/api/bootstrap', authRequired, ah(async (req, res) => {
     expenses: expenses.map(mapExpense),
     stock: stock.map(mapStock),
     tarifs: tarifs.map(t => ({ type: t.type, prix: t.prix, prixRepassage: t.prix_repassage || 0 })),
+    expenseCats: expCats.map(c => c.nom),
     settings: { loyaltyRate: Number(settings.loyaltyRate) || 1000, smsProvider: settings.smsProvider || 'HSMS.CI', shopName: settings.shopName || 'Presto Pressing' },
     notifConfig: req.user.role==='Administrateur' ? ['notif_email','smtp_server','smtp_login','smtp_password','smtp_port','sms_url','sms_apikey','sms_sender','sms_clientsecret','sms_clientid','sms_token'].reduce((o,k)=>{o[k]=settings[k]||'';return o;},{}) : {}
   });
@@ -423,6 +425,20 @@ app.put('/api/tarifs', authRequired, requireModule('parametres'), ah(async (req,
 
 app.delete('/api/tarifs/:type', authRequired, requireModule('parametres'), ah(async (req, res) => {
   await pool.query('DELETE FROM tarifs WHERE type=?', [req.params.type]);
+  res.json({ ok: true });
+}));
+
+app.post('/api/expense-categories', authRequired, requireModule('parametres'), ah(async (req, res) => {
+  const nom = (req.body && req.body.nom || '').trim();
+  if (!nom) return res.status(400).json({ error: 'Nom requis' });
+  const [ex] = await pool.query('SELECT nom FROM expense_categories WHERE LOWER(nom)=LOWER(?)', [nom]);
+  if (ex.length) return res.status(400).json({ error: 'Cette catégorie existe déjà' });
+  await pool.query('INSERT INTO expense_categories (nom) VALUES (?)', [nom]);
+  res.json({ nom });
+}));
+
+app.delete('/api/expense-categories/:nom', authRequired, requireModule('parametres'), ah(async (req, res) => {
+  await pool.query('DELETE FROM expense_categories WHERE nom=?', [req.params.nom]);
   res.json({ ok: true });
 }));
 

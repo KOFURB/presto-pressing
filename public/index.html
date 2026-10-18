@@ -2716,6 +2716,7 @@ function applyBootstrap(d){
     expenses: d.expenses || [],
     stock: d.stock || [],
     tarifs: d.tarifs || [],
+    expenseCats: d.expenseCats || [],
     settings: d.settings || { loyaltyRate:1000, smsProvider:'HSMS.CI', shopName:'Presto Pressing' },
     notifConfig: d.notifConfig || {},
     me: d.me,
@@ -3559,9 +3560,10 @@ function renderFinances(){
     </div>
   </div>`;
 }
-const EXP_CATS=['Salaires','Lessive & produits','Loyer','Électricité','Eau','Emballages','Transport','Maintenance','Autre'];
+const EXP_CATS_DEFAUT=['Salaires','Lessive & produits','Loyer','Électricité','Eau','Emballages','Transport','Maintenance','Autre'];
+const expCats=()=> (DB.expenseCats && DB.expenseCats.length) ? DB.expenseCats : EXP_CATS_DEFAUT;
 window.expenseForm=function(){
-  window._exps=[{date:todayISO(),cat:EXP_CATS[0],lib:'',mnt:0}];
+  window._exps=[{date:todayISO(),cat:expCats()[0],lib:'',mnt:0}];
   openModal(`<div class="modal-head"><h3>Nouvelle dépense</h3><button class="icon-btn btn-ghost" onclick="closeModal()">${svg('x')}</button></div>
   <div class="modal-body">
     <label style="font-size:12px;font-weight:600;color:var(--ink-soft)">Dépenses à enregistrer</label>
@@ -3583,14 +3585,14 @@ function renderExpRows(){
   const wrap=document.getElementById('expRows');
   wrap.innerHTML=window._exps.map((e,i)=>`<div class="exp-row">
     <input type="date" value="${e.date}" onchange="expChange(${i},'date',this.value)">
-    <select onchange="expChange(${i},'cat',this.value)">${EXP_CATS.map(c=>`<option ${c===e.cat?'selected':''}>${c}</option>`).join('')}</select>
+    <select onchange="expChange(${i},'cat',this.value)">${expCats().map(c=>`<option ${c===e.cat?'selected':''}>${esc(c)}</option>`).join('')}</select>
     <input type="text" class="exp-lib" placeholder="Description" value="${esc(e.lib||'')}" onchange="expChange(${i},'lib',this.value)">
     <input type="number" class="r" value="${e.mnt}" onchange="expChange(${i},'mnt',this.value)">
     <button class="mini-x" onclick="removeExpRow(${i})" ${window._exps.length<=1?'style="opacity:.4;pointer-events:none"':''}>${svg('trash')}</button>
   </div>`).join('');
   recalcExp();
 }
-window.addExpRow=()=>{ window._exps.push({date:todayISO(),cat:EXP_CATS[0],lib:'',mnt:0}); renderExpRows(); };
+window.addExpRow=()=>{ window._exps.push({date:todayISO(),cat:expCats()[0],lib:'',mnt:0}); renderExpRows(); };
 window.removeExpRow=i=>{ window._exps.splice(i,1); renderExpRows(); };
 window.expChange=(i,k,v)=>{ if(k==='mnt') v=parseInt(v)||0; window._exps[i][k]=v; if(k==='mnt') recalcExp(); };
 function recalcExp(){ const t=window._exps.reduce((s,e)=>s+(parseInt(e.mnt)||0),0); const el=document.getElementById('expTotal'); if(el) el.textContent=FCFA(t); }
@@ -3824,6 +3826,14 @@ function renderParametres(){
           <button class="btn btn-sm" onclick="exportCSV()">${svg('download')} Exporter les commandes</button><button class="btn btn-sm btn-danger" onclick="resetDemo()">${svg('trash')} Réinitialiser données test</button>
         </div>
       </div>
+      <div class="card card-pad" style="margin-top:16px">
+        <div class="section-head"><h2>Catégories de dépenses</h2></div>
+        <div class="list-plain">${expCats().map(c=>`<div class="list-row" data-cat="${esc(c)}"><span class="kpi-ico" style="background:var(--accent-soft);color:var(--accent);width:30px;height:30px">${svg('finances')}</span><div style="flex:1"><div class="cell-strong">${esc(c)}</div></div><button class="btn btn-sm btn-ghost btn-danger" onclick="deleteExpenseCat(this.closest('.list-row').dataset.cat)" title="Supprimer">${svg('trash')}</button></div>`).join('')}</div>
+        <div style="display:flex;gap:8px;margin-top:10px">
+          <input id="newExpCat" placeholder="Nouvelle catégorie" onkeydown="if(event.key==='Enter')addExpenseCat()" style="flex:1;border:1px solid var(--line);background:var(--surface-2);border-radius:8px;padding:8px 10px;color:var(--ink)">
+          <button class="btn btn-sm btn-primary" onclick="addExpenseCat()">${svg('plus')} Ajouter</button>
+        </div>
+      </div>
     </div>
   </div>
   <div class="card card-pad" style="margin-top:16px">
@@ -3871,6 +3881,18 @@ window.saveTarif=async function(){
 };
 window.deleteTarif=async function(type){
   try{ await API.del('/tarifs/'+encodeURIComponent(type)); DB.tarifs=DB.tarifs.filter(t=>t.type!==type); renderParametres(); toast('Article supprimé'); }
+  catch(e){ toast(e.message,'err'); }
+};
+window.addExpenseCat=async function(){
+  const el=document.getElementById('newExpCat'); const nom=(el?el.value:'').trim();
+  if(!nom){ toast('Nom requis','err'); return; }
+  if(!DB.expenseCats) DB.expenseCats=[];
+  if(DB.expenseCats.some(c=>c.toLowerCase()===nom.toLowerCase())){ toast('Cette catégorie existe déjà','err'); return; }
+  try{ await API.post('/expense-categories',{nom}); DB.expenseCats.push(nom); DB.expenseCats.sort((a,b)=>a.localeCompare(b)); renderParametres(); toast('Catégorie ajoutée','good'); }
+  catch(e){ toast(e.message,'err'); }
+};
+window.deleteExpenseCat=async function(nom){
+  try{ await API.del('/expense-categories/'+encodeURIComponent(nom)); DB.expenseCats=(DB.expenseCats||[]).filter(c=>c!==nom); renderParametres(); toast('Catégorie supprimée','good'); }
   catch(e){ toast(e.message,'err'); }
 };
 window.saveSettings=async function(){ const loyaltyRate=parseInt(document.getElementById('p_loyal').value)||1000; const smsProvider=document.getElementById('p_sms').value; try{ await API.put('/settings',{loyaltyRate,smsProvider}); DB.settings.loyaltyRate=loyaltyRate; DB.settings.smsProvider=smsProvider; toast('Paramètres enregistrés','good'); }catch(e){ toast(e.message,'err'); } };
